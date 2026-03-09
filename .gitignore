@@ -1,0 +1,8 @@
+target/
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+.mem/
+AGENTS.md

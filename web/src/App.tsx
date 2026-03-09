@@ -1,0 +1,680 @@
+import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
+
+import { messages } from './i18n'
+import type {
+  AppConfig,
+  ApplicationRule,
+  GestureAction,
+  GestureBinding,
+  HotkeySpec,
+  Locale,
+  StatusPayload
+} from './types'
+
+const DIRECTION_BUTTONS = ['U', 'D', 'L', 'R'] as const
+
+const createEmptyBinding = (): GestureBinding => ({
+  gesture: '',
+  action: {
+    type: 'hotkey',
+    hotkey: { modifiers: [], key: '' }
+  }
+})
+
+const createEmptyRule = (): ApplicationRule => ({
+  id: crypto.randomUUID(),
+  name: '',
+  processNames: [],
+  gestures: [createEmptyBinding()]
+})
+
+const normalizeGesture = (value: string) =>
+  value
+    .toUpperCase()
+    .split('')
+    .filter((item) => DIRECTION_BUTTONS.includes(item as (typeof DIRECTION_BUTTONS)[number]))
+    .join('')
+
+const formatHotkey = (hotkey?: HotkeySpec) => {
+  if (!hotkey || !hotkey.key) {
+    return ''
+  }
+
+  const parts = [...hotkey.modifiers]
+  parts.push(formatKeyName(hotkey.key))
+  return parts.join(' + ')
+}
+
+const formatKeyName = (key: string) => {
+  if (key.startsWith('Key')) {
+    return key.slice(3)
+  }
+  if (key.startsWith('Digit')) {
+    return key.slice(5)
+  }
+  return key.replace('Arrow', '')
+}
+
+const normalizeHotkeyFromEvent = (event: KeyboardEvent<HTMLInputElement>): HotkeySpec | null => {
+  const ignored = new Set(['Control', 'Shift', 'Alt', 'Meta'])
+  if (ignored.has(event.key)) {
+    return null
+  }
+
+  const specialMap: Record<string, string> = {
+    ArrowLeft: 'ArrowLeft',
+    ArrowRight: 'ArrowRight',
+    ArrowUp: 'ArrowUp',
+    ArrowDown: 'ArrowDown',
+    Enter: 'Enter',
+    Tab: 'Tab',
+    ' ': 'Space',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    Escape: 'Escape',
+    Home: 'Home',
+    End: 'End',
+    PageUp: 'PageUp',
+    PageDown: 'PageDown'
+  }
+
+  let key = specialMap[event.key]
+  if (!key && /^F\d{1,2}$/.test(event.key)) {
+    key = event.key.toUpperCase()
+  }
+  if (!key && (/^Key[A-Z]$/.test(event.code) || /^Digit\d$/.test(event.code))) {
+    key = event.code
+  }
+  if (!key && event.key.length === 1 && /[a-z0-9]/i.test(event.key)) {
+    key = /\d/.test(event.key) ? `Digit${event.key}` : `Key${event.key.toUpperCase()}`
+  }
+
+  if (!key) {
+    return null
+  }
+
+  const modifiers = [
+    event.ctrlKey ? 'Ctrl' : null,
+    event.altKey ? 'Alt' : null,
+    event.shiftKey ? 'Shift' : null,
+    event.metaKey ? 'Meta' : null
+  ].filter(Boolean) as string[]
+
+  return { modifiers, key }
+}
+
+const normalizeActionType = (type: GestureAction['type']): GestureAction => {
+  if (type === 'none') {
+    return { type: 'none' }
+  }
+  if (type === 'shell') {
+    return { type: 'shell', command: '' }
+  }
+  return {
+    type: 'hotkey',
+    hotkey: {
+      modifiers: [],
+      key: ''
+    }
+  }
+}
+
+export default function App() {
+  const [config, setConfig] = useState<AppConfig | null>(null)
+  const [status, setStatus] = useState<StatusPayload | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string>('')
+  const [error, setError] = useState<string>('')
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [configResponse, statusResponse] = await Promise.all([
+          fetch('/api/config'),
+          fetch('/api/status')
+        ])
+        if (!configResponse.ok || !statusResponse.ok) {
+          throw new Error('Failed to fetch config payload')
+        }
+
+        const configPayload = (await configResponse.json()) as AppConfig
+        const statusPayload = (await statusResponse.json()) as StatusPayload
+        setConfig(configPayload)
+        setStatus(statusPayload)
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void load()
+  }, [])
+
+  const locale: Locale = config?.locale ?? 'zh-CN'
+  const t = useMemo(() => messages[locale], [locale])
+
+  const patchConfig = (updater: (current: AppConfig) => AppConfig) => {
+    setConfig((current) => (current ? updater(current) : current))
+  }
+
+  const saveConfig = async () => {
+    if (!config) {
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const response = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      })
+      if (!response.ok) {
+        throw new Error(await response.text())
+      }
+
+      const updated = (await response.json()) as AppConfig
+      setConfig(updated)
+      setMessage(t.saved)
+    } catch (saveError) {
+      setError(`${t.saveFailed}: ${saveError instanceof Error ? saveError.message : 'Unknown error'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="p-10 text-center text-slate-500">Loading...</div>
+  }
+
+  if (!config) {
+    return <div className="p-10 text-center text-red-500">{error || 'No config loaded'}</div>
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900 sm:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <header className="flex flex-col gap-4 rounded-[2rem] bg-gradient-to-r from-slate-900 via-blue-900 to-cyan-700 px-8 py-8 text-white shadow-panel">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-2 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                Gesto
+              </div>
+              <h1 className="text-3xl font-bold sm:text-4xl">{t.title}</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-cyan-50/90">{t.subtitle}</p>
+            </div>
+            <button className="btn-primary" onClick={saveConfig} disabled={saving}>
+              {saving ? t.saving : t.save}
+            </button>
+          </div>
+          {(message || error) && (
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+                error ? 'bg-red-500/15 text-red-100' : 'bg-emerald-500/15 text-emerald-100'
+              }`}
+            >
+              {error || message}
+            </div>
+          )}
+        </header>
+
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="panel">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">{t.globalSettings}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t.directionHint}</p>
+              </div>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="field-label">{t.language}</label>
+                <select
+                  className="text-input"
+                  value={config.locale}
+                  onChange={(event) =>
+                    patchConfig((current) => ({ ...current, locale: event.target.value as Locale }))
+                  }
+                >
+                  <option value="zh-CN">简体中文</option>
+                  <option value="en-US">English</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-label">{t.trailColor}</label>
+                <input
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2"
+                  type="color"
+                  value={config.general.trailColor}
+                  onChange={(event) =>
+                    patchConfig((current) => ({
+                      ...current,
+                      general: { ...current.general, trailColor: event.target.value }
+                    }))
+                  }
+                />
+              </div>
+              <NumberField
+                label={t.trailWidth}
+                min={1}
+                max={24}
+                step={0.5}
+                value={config.general.trailWidth}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, trailWidth: value }
+                  }))
+                }
+              />
+              <NumberField
+                label={t.minimumDistance}
+                min={8}
+                max={120}
+                step={1}
+                value={config.general.minimumDistance}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, minimumDistance: value }
+                  }))
+                }
+              />
+              <NumberField
+                label={t.fadeDuration}
+                min={60}
+                max={2000}
+                step={10}
+                value={config.general.fadeDurationMs}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, fadeDurationMs: value }
+                  }))
+                }
+              />
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-700">{t.autostart}</div>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-3">
+                  <span className="text-sm text-slate-500">{config.general.autostart ? 'On' : 'Off'}</span>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    checked={config.general.autostart}
+                    onChange={(event) =>
+                      patchConfig((current) => ({
+                        ...current,
+                        general: { ...current.general, autostart: event.target.checked }
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2 className="text-xl font-semibold">{t.status}</h2>
+            <div className="mt-5 space-y-4 text-sm">
+              <InfoRow label={t.serverUrl} value={status?.serverUrl ?? '-'} />
+              <InfoRow label={t.configPath} value={status?.configPath ?? '-'} />
+            </div>
+          </section>
+        </div>
+
+        <section className="panel">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">{t.defaultRules}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t.directionHint}</p>
+            </div>
+            <button
+              className="btn-secondary"
+              onClick={() =>
+                patchConfig((current) => ({
+                  ...current,
+                  defaultActions: [...current.defaultActions, createEmptyBinding()]
+                }))
+              }
+            >
+              {t.addBinding}
+            </button>
+          </div>
+          <div className="space-y-4">
+            {config.defaultActions.map((binding, index) => (
+              <BindingEditor
+                key={`default-${index}`}
+                binding={binding}
+                text={t}
+                onChange={(nextBinding) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    defaultActions: current.defaultActions.map((item, itemIndex) =>
+                      itemIndex === index ? nextBinding : item
+                    )
+                  }))
+                }
+                onDelete={() =>
+                  patchConfig((current) => ({
+                    ...current,
+                    defaultActions: current.defaultActions.filter((_, itemIndex) => itemIndex !== index)
+                  }))
+                }
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">{t.appRules}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t.processHint}</p>
+            </div>
+            <button
+              className="btn-secondary"
+              onClick={() => patchConfig((current) => ({ ...current, appRules: [...current.appRules, createEmptyRule()] }))}
+            >
+              {t.addRule}
+            </button>
+          </div>
+
+          <div className="space-y-6">
+            {config.appRules.map((rule, ruleIndex) => (
+              <div key={rule.id} className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5">
+                <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr_auto]">
+                  <div>
+                    <label className="field-label">{t.ruleName}</label>
+                    <input
+                      className="text-input"
+                      value={rule.name}
+                      onChange={(event) =>
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.map((item, index) =>
+                            index === ruleIndex ? { ...item, name: event.target.value } : item
+                          )
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">{t.processNames}</label>
+                    <input
+                      className="text-input"
+                      value={rule.processNames.join(', ')}
+                      onChange={(event) => {
+                        const processNames = event.target.value
+                          .split(',')
+                          .map((item) => item.trim())
+                          .filter(Boolean)
+
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.map((item, index) =>
+                            index === ruleIndex ? { ...item, processNames } : item
+                          )
+                        }))
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      className="btn-danger w-full"
+                      onClick={() =>
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.filter((_, index) => index !== ruleIndex)
+                        }))
+                      }
+                    >
+                      {t.delete}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  {rule.gestures.map((binding, bindingIndex) => (
+                    <BindingEditor
+                      key={`${rule.id}-${bindingIndex}`}
+                      binding={binding}
+                      text={t}
+                      onChange={(nextBinding) =>
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.map((item, index) =>
+                            index === ruleIndex
+                              ? {
+                                  ...item,
+                                  gestures: item.gestures.map((gestureItem, gestureIndex) =>
+                                    gestureIndex === bindingIndex ? nextBinding : gestureItem
+                                  )
+                                }
+                              : item
+                          )
+                        }))
+                      }
+                      onDelete={() =>
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.map((item, index) =>
+                            index === ruleIndex
+                              ? {
+                                  ...item,
+                                  gestures: item.gestures.filter((_, gestureIndex) => gestureIndex !== bindingIndex)
+                                }
+                              : item
+                          )
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
+
+                <button
+                  className="btn-secondary mt-4"
+                  onClick={() =>
+                    patchConfig((current) => ({
+                      ...current,
+                      appRules: current.appRules.map((item, index) =>
+                        index === ruleIndex
+                          ? { ...item, gestures: [...item.gestures, createEmptyBinding()] }
+                          : item
+                      )
+                    }))
+                  }
+                >
+                  {t.addBinding}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function NumberField(props: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div>
+      <label className="field-label">{props.label}</label>
+      <input
+        className="text-input"
+        type="number"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        onChange={(event) => props.onChange(Number(event.target.value))}
+      />
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</div>
+      <div className="mt-2 break-all text-sm text-slate-700">{value}</div>
+    </div>
+  )
+}
+
+function BindingEditor(props: {
+  binding: GestureBinding
+  text: (typeof messages)['zh-CN']
+  onChange: (binding: GestureBinding) => void
+  onDelete: () => void
+}) {
+  const actionType = props.binding.action.type
+
+  return (
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.2fr_auto]">
+        <div>
+          <label className="field-label">{props.text.gesture}</label>
+          <GestureComposer
+            value={props.binding.gesture}
+            text={props.text}
+            onChange={(gesture) => props.onChange({ ...props.binding, gesture })}
+          />
+        </div>
+
+        <div>
+          <label className="field-label">{props.text.actionType}</label>
+          <select
+            className="text-input"
+            value={actionType}
+            onChange={(event) =>
+              props.onChange({
+                ...props.binding,
+                action: normalizeActionType(event.target.value as GestureAction['type'])
+              })
+            }
+          >
+            <option value="hotkey">{props.text.hotkey}</option>
+            <option value="shell">{props.text.shell}</option>
+            <option value="none">{props.text.none}</option>
+          </select>
+        </div>
+
+        <div>
+          {actionType === 'hotkey' && 'hotkey' in props.binding.action && (
+            <>
+              <label className="field-label">{props.text.hotkey}</label>
+              <HotkeyRecorder
+                hotkey={props.binding.action.hotkey}
+                placeholder={props.text.hotkeyHint}
+                onChange={(hotkey) =>
+                  props.onChange({
+                    ...props.binding,
+                    action: { type: 'hotkey', hotkey }
+                  })
+                }
+              />
+            </>
+          )}
+
+          {actionType === 'shell' && 'command' in props.binding.action && (
+            <>
+              <label className="field-label">{props.text.command}</label>
+              <input
+                className="text-input"
+                value={props.binding.action.command}
+                onChange={(event) =>
+                  props.onChange({
+                    ...props.binding,
+                    action: { type: 'shell', command: event.target.value }
+                  })
+                }
+              />
+            </>
+          )}
+
+          {actionType === 'none' && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              {props.text.none}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-end">
+          <button className="btn-danger w-full" onClick={props.onDelete}>
+            {props.text.delete}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GestureComposer(props: {
+  value: string
+  text: (typeof messages)['zh-CN']
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <input
+        className="text-input"
+        value={props.value}
+        onChange={(event) => props.onChange(normalizeGesture(event.target.value))}
+        placeholder="UDLR"
+      />
+      <div className="flex flex-wrap gap-2">
+        {DIRECTION_BUTTONS.map((direction) => (
+          <button
+            key={direction}
+            className="btn-secondary min-w-12"
+            onClick={() => props.onChange(normalizeGesture(props.value + direction))}
+            type="button"
+          >
+            {direction}
+          </button>
+        ))}
+        <button className="btn-secondary" onClick={() => props.onChange(props.value.slice(0, -1))} type="button">
+          {props.text.backspace}
+        </button>
+        <button className="btn-secondary" onClick={() => props.onChange('')} type="button">
+          {props.text.clear}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function HotkeyRecorder(props: {
+  hotkey: HotkeySpec
+  placeholder: string
+  onChange: (value: HotkeySpec) => void
+}) {
+  return (
+    <input
+      className="text-input"
+      readOnly
+      value={formatHotkey(props.hotkey)}
+      placeholder={props.placeholder}
+      onKeyDown={(event) => {
+        event.preventDefault()
+        const nextHotkey = normalizeHotkeyFromEvent(event)
+        if (nextHotkey) {
+          props.onChange(nextHotkey)
+        }
+      }}
+    />
+  )
+}
