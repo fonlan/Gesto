@@ -36,6 +36,7 @@ const GLOBAL_RULE_ID = '__global__'
 
 const createEmptyBinding = (): GestureBinding => ({
   gesture: '',
+  description: '',
   action: {
     type: 'hotkey',
     hotkey: { modifiers: [], key: '' }
@@ -887,7 +888,7 @@ function BindingEditor(props: {
           </select>
         </div>
 
-        <div>
+        <div className='space-y-3'>
           {actionType === 'hotkey' && 'hotkey' in props.binding.action && (
             <>
               <label className='field-label'>{props.text.hotkey}</label>
@@ -927,6 +928,23 @@ function BindingEditor(props: {
               {props.text.none}
             </div>
           )}
+
+          <div>
+            <label className='field-label'>{props.text.description}</label>
+            <input
+              aria-label={props.text.description}
+              autoComplete='off'
+              className='text-input'
+              value={props.binding.description}
+              onChange={(event) =>
+                props.onChange({
+                  ...props.binding,
+                  description: event.target.value
+                })
+              }
+              placeholder={props.text.descriptionPlaceholder}
+            />
+          </div>
         </div>
 
         <div className='flex items-end xl:items-start'>

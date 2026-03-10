@@ -39,6 +39,8 @@ export interface I18nText {
   emptyProcessNames: string
   unnamedRule: string
   gesture: string
+  description: string
+  descriptionPlaceholder: string
   actionType: string
   hotkey: string
   command: string
@@ -93,6 +95,8 @@ export const messages: Record<Locale, I18nText> = {
     emptyProcessNames: '暂未设置进程名',
     unnamedRule: '未命名规则',
     gesture: '手势',
+    description: '作用描述',
+    descriptionPlaceholder: '例如：返回上一页',
     actionType: '动作类型',
     hotkey: '快捷键',
     command: '命令',
@@ -145,6 +149,8 @@ export const messages: Record<Locale, I18nText> = {
     emptyProcessNames: 'No process names yet',
     unnamedRule: 'Unnamed Rule',
     gesture: 'Gesture',
+    description: 'Description',
+    descriptionPlaceholder: 'e.g. Go back to the previous page',
     actionType: 'Action Type',
     hotkey: 'Shortcut',
     command: 'Command',

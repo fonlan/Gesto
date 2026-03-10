@@ -59,6 +59,8 @@ pub struct ApplicationRule {
 #[serde(rename_all = "camelCase")]
 pub struct GestureBinding {
     pub gesture: String,
+    #[serde(default)]
+    pub description: String,
     pub action: GestureAction,
 }
 
@@ -92,6 +94,7 @@ impl Default for AppConfig {
             general: GeneralSettings::default(),
             default_actions: vec![GestureBinding {
                 gesture: "DR".to_string(),
+                description: "切换到上一个窗口".to_string(),
                 action: GestureAction::Hotkey {
                     hotkey: HotkeySpec {
                         modifiers: vec!["Alt".to_string()],
@@ -105,9 +108,18 @@ impl Default for AppConfig {
                     name: "Chrome / Edge".to_string(),
                     process_names: vec!["chrome.exe".to_string(), "msedge.exe".to_string()],
                     gestures: vec![
-                        GestureBinding::hotkey("L", &["Alt"], "ArrowLeft"),
-                        GestureBinding::hotkey("R", &["Alt"], "ArrowRight"),
-                        GestureBinding::hotkey("D", &["Ctrl"], "KeyW"),
+                        GestureBinding {
+                            description: "返回上一页".to_string(),
+                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowLeft")
+                        },
+                        GestureBinding {
+                            description: "前进到下一页".to_string(),
+                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
+                        },
+                        GestureBinding {
+                            description: "关闭当前标签页".to_string(),
+                            ..GestureBinding::hotkey("D", &["Ctrl"], "KeyW")
+                        },
                     ],
                 },
                 ApplicationRule {
@@ -115,8 +127,14 @@ impl Default for AppConfig {
                     name: "Explorer".to_string(),
                     process_names: vec!["explorer.exe".to_string()],
                     gestures: vec![
-                        GestureBinding::hotkey("L", &["Alt"], "ArrowUp"),
-                        GestureBinding::hotkey("R", &["Alt"], "ArrowRight"),
+                        GestureBinding {
+                            description: "返回上一级目录".to_string(),
+                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowUp")
+                        },
+                        GestureBinding {
+                            description: "前进到下一个位置".to_string(),
+                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
+                        },
                     ],
                 },
                 ApplicationRule {
@@ -124,8 +142,14 @@ impl Default for AppConfig {
                     name: "Visual Studio Code".to_string(),
                     process_names: vec!["code.exe".to_string()],
                     gestures: vec![
-                        GestureBinding::hotkey("L", &["Alt"], "ArrowLeft"),
-                        GestureBinding::hotkey("R", &["Alt"], "ArrowRight"),
+                        GestureBinding {
+                            description: "回到上一个编辑位置".to_string(),
+                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowLeft")
+                        },
+                        GestureBinding {
+                            description: "前进到下一个编辑位置".to_string(),
+                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
+                        },
                     ],
                 },
             ],
@@ -152,6 +176,7 @@ impl GestureBinding {
     pub fn hotkey(gesture: &str, modifiers: &[&str], key: &str) -> Self {
         Self {
             gesture: gesture.to_string(),
+            description: String::new(),
             action: GestureAction::Hotkey {
                 hotkey: HotkeySpec {
                     modifiers: modifiers.iter().map(|item| (*item).to_string()).collect(),
@@ -182,12 +207,14 @@ impl AppConfig {
 
         for binding in &mut self.default_actions {
             binding.gesture = normalize_gesture(&binding.gesture);
+            binding.description = binding.description.trim().to_string();
         }
 
         for rule in &mut self.app_rules {
             rule.process_names = normalize_process_names(&rule.process_names);
             for binding in &mut rule.gestures {
                 binding.gesture = normalize_gesture(&binding.gesture);
+                binding.description = binding.description.trim().to_string();
             }
         }
 

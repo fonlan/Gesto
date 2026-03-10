@@ -28,6 +28,7 @@ export interface ApplicationRule {
 
 export interface GestureBinding {
   gesture: string
+  description: string
   action: GestureAction
 }
 
