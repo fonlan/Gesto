@@ -22,16 +22,14 @@ Gesto 是一个仅面向 Windows 的鼠标手势软件：
 ## 开发
 
 ```powershell
-npm install --prefix web
-npm run build --prefix web
 cargo run
 ```
+
+首次构建或前端依赖变更时，`cargo run` / `cargo check` / `cargo build --release` 会自动在 Windows 上执行前端依赖安装与 `web/dist` 构建；前提是本机可用 `npm`。
 
 ## 发布
 
 ```powershell
-npm install --prefix web
-npm run build --prefix web
 cargo build --release
 ```
 
