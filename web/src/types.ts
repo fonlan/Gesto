@@ -10,6 +10,7 @@ export interface AppConfig {
 
 export interface GeneralSettings {
   trailColor: string
+  trailOpacity: number
   trailWidth: number
   minimumDistance: number
   fadeDurationMs: number

@@ -28,6 +28,8 @@ pub struct AppConfig {
 pub struct GeneralSettings {
     #[serde(default = "default_trail_color")]
     pub trail_color: String,
+    #[serde(default = "default_trail_opacity")]
+    pub trail_opacity: f32,
     #[serde(default = "default_trail_width")]
     pub trail_width: f32,
     #[serde(default = "default_minimum_distance")]
@@ -137,6 +139,7 @@ impl Default for GeneralSettings {
     fn default() -> Self {
         Self {
             trail_color: default_trail_color(),
+            trail_opacity: default_trail_opacity(),
             trail_width: default_trail_width(),
             minimum_distance: default_minimum_distance(),
             fade_duration_ms: default_fade_duration(),
@@ -168,6 +171,7 @@ impl AppConfig {
             "en-US" => "en-US".to_string(),
             _ => "zh-CN".to_string(),
         };
+        self.general.trail_opacity = self.general.trail_opacity.clamp(0.0, 100.0);
         self.general.trail_width = self.general.trail_width.clamp(1.0, 24.0);
         self.general.minimum_distance = self.general.minimum_distance.clamp(8.0, 120.0);
         self.general.fade_duration_ms = self.general.fade_duration_ms.clamp(60, 2_000);
@@ -330,6 +334,10 @@ fn default_locale() -> String {
 
 fn default_trail_color() -> String {
     "#3b82f6".to_string()
+}
+
+fn default_trail_opacity() -> f32 {
+    70.0
 }
 
 fn default_trail_width() -> f32 {

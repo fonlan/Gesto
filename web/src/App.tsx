@@ -334,6 +334,19 @@ export default function App() {
                   }
                 />
               </div>
+              <SliderNumberField
+                label={t.trailOpacity}
+                min={0}
+                max={100}
+                step={1}
+                value={config.general.trailOpacity}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, trailOpacity: value }
+                  }))
+                }
+              />
               <NumberField
                 label={t.trailWidth}
                 min={1}
@@ -648,6 +661,41 @@ export default function App() {
             </div>
           </div>
         </section>
+      </div>
+    </div>
+  )
+}
+
+function SliderNumberField(props: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div>
+      <label className='field-label'>{props.label}</label>
+      <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
+        <input
+          className='h-2 min-w-0 w-full flex-1 cursor-pointer accent-blue-600'
+          type='range'
+          min={props.min}
+          max={props.max}
+          step={props.step}
+          value={props.value}
+          onChange={(event) => props.onChange(Number(event.target.value))}
+        />
+        <input
+          className='text-input w-full shrink-0 sm:w-24'
+          type='number'
+          min={props.min}
+          max={props.max}
+          step={props.step}
+          value={props.value}
+          onChange={(event) => props.onChange(Number(event.target.value))}
+        />
       </div>
     </div>
   )

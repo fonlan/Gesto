@@ -14,6 +14,7 @@ export interface I18nText {
   globalSettings: string
   language: string
   trailColor: string
+  trailOpacity: string
   trailWidth: string
   minimumDistance: string
   fadeDuration: string
@@ -67,6 +68,7 @@ export const messages: Record<Locale, I18nText> = {
     globalSettings: '全局设置',
     language: '语言',
     trailColor: '轨迹颜色',
+    trailOpacity: '轨迹不透明度（%）',
     trailWidth: '轨迹宽度',
     minimumDistance: '最小触发距离',
     fadeDuration: '渐隐时长（毫秒）',
@@ -118,6 +120,7 @@ export const messages: Record<Locale, I18nText> = {
     globalSettings: 'Global Settings',
     language: 'Language',
     trailColor: 'Trail Color',
+    trailOpacity: 'Trail Opacity (%)',
     trailWidth: 'Trail Width',
     minimumDistance: 'Minimum Trigger Distance',
     fadeDuration: 'Fade Duration (ms)',

@@ -74,11 +74,15 @@ impl TrailStyle {
             red,
             green,
             blue,
-            alpha: 180,
+            alpha: opacity_percent_to_alpha(general.trail_opacity),
             width: general.trail_width,
             fade_duration_ms: general.fade_duration_ms,
         }
     }
+}
+
+fn opacity_percent_to_alpha(opacity_percent: f32) -> u8 {
+    ((opacity_percent.clamp(0.0, 100.0) / 100.0) * 255.0).round() as u8
 }
 
 impl OverlayController {
