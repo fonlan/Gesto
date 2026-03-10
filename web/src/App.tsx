@@ -869,26 +869,45 @@ function BindingEditor(props: {
           />
         </div>
 
-        <div>
-          <label className='field-label'>{props.text.actionType}</label>
-          <select
-            aria-label={props.text.actionType}
-            className='text-input'
-            value={actionType}
-            onChange={(event) =>
-              props.onChange({
-                ...props.binding,
-                action: normalizeActionType(event.target.value as GestureAction['type'])
-              })
-            }
-          >
-            <option value='hotkey'>{props.text.hotkey}</option>
-            <option value='shell'>{props.text.shell}</option>
-            <option value='none'>{props.text.none}</option>
-          </select>
+        <div className='space-y-3'>
+          <div>
+            <label className='field-label'>{props.text.actionType}</label>
+            <select
+              aria-label={props.text.actionType}
+              className='text-input'
+              value={actionType}
+              onChange={(event) =>
+                props.onChange({
+                  ...props.binding,
+                  action: normalizeActionType(event.target.value as GestureAction['type'])
+                })
+              }
+            >
+              <option value='hotkey'>{props.text.hotkey}</option>
+              <option value='shell'>{props.text.shell}</option>
+              <option value='none'>{props.text.none}</option>
+            </select>
+          </div>
+
+          <div>
+            <label className='field-label'>{props.text.description}</label>
+            <input
+              aria-label={props.text.description}
+              autoComplete='off'
+              className='text-input'
+              value={props.binding.description}
+              onChange={(event) =>
+                props.onChange({
+                  ...props.binding,
+                  description: event.target.value
+                })
+              }
+              placeholder={props.text.descriptionPlaceholder}
+            />
+          </div>
         </div>
 
-        <div className='space-y-3'>
+        <div className='space-y-2.5'>
           {actionType === 'hotkey' && 'hotkey' in props.binding.action && (
             <>
               <label className='field-label'>{props.text.hotkey}</label>
@@ -928,23 +947,6 @@ function BindingEditor(props: {
               {props.text.none}
             </div>
           )}
-
-          <div>
-            <label className='field-label'>{props.text.description}</label>
-            <input
-              aria-label={props.text.description}
-              autoComplete='off'
-              className='text-input'
-              value={props.binding.description}
-              onChange={(event) =>
-                props.onChange({
-                  ...props.binding,
-                  description: event.target.value
-                })
-              }
-              placeholder={props.text.descriptionPlaceholder}
-            />
-          </div>
         </div>
 
         <div className='flex items-end xl:items-start'>
@@ -1022,9 +1024,6 @@ function HotkeyRecorder(props: {
         }}
       />
 
-      <div className='rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500'>
-        {props.text.hotkeyManualHint}
-      </div>
 
       <div className='flex flex-wrap gap-1.5'>
         {HOTKEY_MODIFIER_ORDER.map((modifier) => {
@@ -1045,12 +1044,10 @@ function HotkeyRecorder(props: {
             </button>
           )
         })}
-      </div>
 
-      <div className='flex flex-col gap-2 sm:flex-row'>
         <select
           aria-label={props.text.selectKey}
-          className='text-input'
+          className='text-input min-w-[9rem] flex-1 sm:flex-none sm:w-40'
           value={props.hotkey.key}
           onChange={(event) => props.onChange(normalizeHotkey({ ...props.hotkey, key: event.target.value }))}
         >
