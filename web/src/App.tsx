@@ -126,6 +126,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const fallbackText = messages['zh-CN']
 
   useEffect(() => {
     const load = async () => {
@@ -135,7 +136,9 @@ export default function App() {
           fetch('/api/status')
         ])
         if (!configResponse.ok || !statusResponse.ok) {
-          throw new Error('Failed to fetch config payload')
+          const configMessage = configResponse.ok ? '' : await configResponse.text()
+          const statusMessage = statusResponse.ok ? '' : await statusResponse.text()
+          throw new Error(configMessage || statusMessage || fallbackText.fetchConfigFailed)
         }
 
         const configPayload = (await configResponse.json()) as AppConfig
@@ -143,7 +146,7 @@ export default function App() {
         setConfig(configPayload)
         setStatus(statusPayload)
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Unknown error')
+        setError(loadError instanceof Error ? loadError.message : fallbackText.unknownError)
       } finally {
         setLoading(false)
       }
@@ -181,18 +184,18 @@ export default function App() {
       setConfig(updated)
       setMessage(t.saved)
     } catch (saveError) {
-      setError(`${t.saveFailed}: ${saveError instanceof Error ? saveError.message : 'Unknown error'}`)
+      setError(t.saveFailed + ': ' + (saveError instanceof Error ? saveError.message : t.unknownError))
     } finally {
       setSaving(false)
     }
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-slate-500">Loading...</div>
+    return <div className="p-10 text-center text-slate-500">{t.loading}</div>
   }
 
   if (!config) {
-    return <div className="p-10 text-center text-red-500">{error || 'No config loaded'}</div>
+    return <div className="p-10 text-center text-red-500">{error || t.noConfigLoaded}</div>
   }
 
   return (
@@ -294,6 +297,32 @@ export default function App() {
                   patchConfig((current) => ({
                     ...current,
                     general: { ...current.general, fadeDurationMs: value }
+                  }))
+                }
+              />
+              <NumberField
+                label={t.rightClickIdleFallback}
+                min={0}
+                max={1000}
+                step={10}
+                value={config.general.rightClickIdleFallbackMs}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, rightClickIdleFallbackMs: value }
+                  }))
+                }
+              />
+              <NumberField
+                label={t.rightClickIdleMovementTolerance}
+                min={0}
+                max={24}
+                step={0.5}
+                value={config.general.rightClickIdleMovementTolerance}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, rightClickIdleMovementTolerance: value }
                   }))
                 }
               />

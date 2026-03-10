@@ -13,6 +13,8 @@ export interface GeneralSettings {
   trailWidth: number
   minimumDistance: number
   fadeDurationMs: number
+  rightClickIdleFallbackMs: number
+  rightClickIdleMovementTolerance: number
   autostart: boolean
 }
 

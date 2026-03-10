@@ -7,12 +7,18 @@ export interface I18nText {
   saving: string
   saved: string
   saveFailed: string
+  fetchConfigFailed: string
+  unknownError: string
+  loading: string
+  noConfigLoaded: string
   globalSettings: string
   language: string
   trailColor: string
   trailWidth: string
   minimumDistance: string
   fadeDuration: string
+  rightClickIdleFallback: string
+  rightClickIdleMovementTolerance: string
   autostart: string
   status: string
   serverUrl: string
@@ -45,12 +51,18 @@ export const messages: Record<Locale, I18nText> = {
     saving: '保存中...',
     saved: '配置已保存',
     saveFailed: '保存失败',
+    fetchConfigFailed: '获取配置失败',
+    unknownError: '未知错误',
+    loading: '加载中...',
+    noConfigLoaded: '未加载到配置',
     globalSettings: '全局设置',
     language: '语言',
     trailColor: '轨迹颜色',
     trailWidth: '轨迹宽度',
     minimumDistance: '最小触发距离',
     fadeDuration: '渐隐时长（毫秒）',
+    rightClickIdleFallback: '静止右键回退延迟（毫秒，0=关闭）',
+    rightClickIdleMovementTolerance: '静止判定容差（像素）',
     autostart: '开机自启动',
     status: '运行状态',
     serverUrl: '服务地址',
@@ -81,12 +93,18 @@ export const messages: Record<Locale, I18nText> = {
     saving: 'Saving...',
     saved: 'Configuration saved',
     saveFailed: 'Save failed',
+    fetchConfigFailed: 'Failed to fetch config payload',
+    unknownError: 'Unknown error',
+    loading: 'Loading...',
+    noConfigLoaded: 'No config loaded',
     globalSettings: 'Global Settings',
     language: 'Language',
     trailColor: 'Trail Color',
     trailWidth: 'Trail Width',
     minimumDistance: 'Minimum Trigger Distance',
     fadeDuration: 'Fade Duration (ms)',
+    rightClickIdleFallback: 'Idle Right-Click Fallback (ms, 0 = off)',
+    rightClickIdleMovementTolerance: 'Idle Movement Tolerance (px)',
     autostart: 'Launch on Startup',
     status: 'Runtime Status',
     serverUrl: 'Server URL',

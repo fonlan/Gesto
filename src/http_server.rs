@@ -53,10 +53,11 @@ async fn put_config(
     State(context): State<Arc<AppContext>>,
     Json(config): Json<AppConfig>,
 ) -> Result<Json<AppConfig>, (StatusCode, String)> {
+    let locale = context.locale();
     context
         .save_config(config)
         .map(Json)
-        .map_err(internal_error)
+        .map_err(|error| internal_error(&locale, error))
 }
 
 async fn get_status(State(context): State<Arc<AppContext>>) -> Json<StatusPayload> {
@@ -68,14 +69,14 @@ async fn get_status(State(context): State<Arc<AppContext>>) -> Json<StatusPayloa
     })
 }
 
-async fn index() -> Response {
-    serve_asset("index.html")
+async fn index(State(context): State<Arc<AppContext>>) -> Response {
+    serve_asset(&context, "index.html")
 }
 
-async fn asset(Path(path): Path<String>) -> Response {
+async fn asset(State(context): State<Arc<AppContext>>, Path(path): Path<String>) -> Response {
     let requested = path.trim_start_matches('/');
     if requested.starts_with("api/") {
-        return (StatusCode::NOT_FOUND, "Not Found").into_response();
+        return localized_message(&context, StatusCode::NOT_FOUND, "Not Found", "未找到资源");
     }
 
     let candidate = if requested.is_empty() {
@@ -84,10 +85,10 @@ async fn asset(Path(path): Path<String>) -> Response {
         requested
     };
 
-    serve_asset(candidate)
+    serve_asset(&context, candidate)
 }
 
-fn serve_asset(path: &str) -> Response {
+fn serve_asset(context: &AppContext, path: &str) -> Response {
     let file = WEB_DIST
         .get_file(path)
         .or_else(|| WEB_DIST.get_file("index.html"));
@@ -101,12 +102,34 @@ fn serve_asset(path: &str) -> Response {
             headers.insert(header::CONTENT_TYPE, content_type);
             (StatusCode::OK, headers, file.contents()).into_response()
         }
-        None => (StatusCode::NOT_FOUND, "Web assets not built").into_response(),
+        None => localized_message(
+            context,
+            StatusCode::NOT_FOUND,
+            "Web assets not built",
+            "前端资源尚未构建",
+        ),
     }
 }
 
-fn internal_error(error: anyhow::Error) -> (StatusCode, String) {
-    (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+fn localized_message(
+    context: &AppContext,
+    status: StatusCode,
+    en: &'static str,
+    zh: &'static str,
+) -> Response {
+    let message = match context.locale().as_str() {
+        "en-US" => en,
+        _ => zh,
+    };
+    (status, message).into_response()
+}
+
+fn internal_error(locale: &str, error: anyhow::Error) -> (StatusCode, String) {
+    let prefix = match locale {
+        "en-US" => "Internal error",
+        _ => "内部错误",
+    };
+    (StatusCode::INTERNAL_SERVER_ERROR, format!("{prefix}: {error}"))
 }
 
 #[derive(Serialize)]

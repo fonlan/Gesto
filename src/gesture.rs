@@ -74,7 +74,10 @@ struct GestureEngine {
 #[derive(Default)]
 struct GestureState {
     right_button_down: bool,
+    normal_click_passthrough: bool,
     gesture_mode: bool,
+    movement_detected: bool,
+    press_serial: u64,
     start_monitor: Option<MonitorToken>,
     start_monitor_bounds: Option<MonitorBounds>,
     start_point: Option<windows::Win32::Foundation::POINT>,
@@ -99,25 +102,34 @@ impl GestureEngine {
 
         let point = data.pt;
         let minimum_distance = self.context.minimum_distance();
+        let idle_movement_tolerance = self.context.right_click_idle_movement_tolerance();
 
         match message {
             WM_RBUTTONDOWN => {
-                let mut state = self.state.lock();
-                state.right_button_down = true;
-                state.gesture_mode = false;
-                state.start_point = Some(point);
-                state.last_point = Some(point);
-                state.direction_anchor = Some(point);
-                state.points.clear();
-                state.points.push(point);
-                state.directions.clear();
-                if let Some((monitor, bounds)) = monitor_from_point(point) {
-                    state.start_monitor = Some(monitor);
-                    state.start_monitor_bounds = Some(bounds);
-                } else {
-                    state.start_monitor = None;
-                    state.start_monitor_bounds = None;
-                }
+                let press_serial = {
+                    let mut state = self.state.lock();
+                    state.press_serial = state.press_serial.wrapping_add(1);
+                    state.right_button_down = true;
+                    state.normal_click_passthrough = false;
+                    state.gesture_mode = false;
+                    state.movement_detected = false;
+                    state.start_point = Some(point);
+                    state.last_point = Some(point);
+                    state.direction_anchor = Some(point);
+                    state.points.clear();
+                    state.points.push(point);
+                    state.directions.clear();
+                    if let Some((monitor, bounds)) = monitor_from_point(point) {
+                        state.start_monitor = Some(monitor);
+                        state.start_monitor_bounds = Some(bounds);
+                    } else {
+                        state.start_monitor = None;
+                        state.start_monitor_bounds = None;
+                    }
+                    state.press_serial
+                };
+
+                self.schedule_idle_right_click_fallback(press_serial);
                 true
             }
             WM_MOUSEMOVE => {
@@ -132,6 +144,15 @@ impl GestureEngine {
                 };
 
                 let total_distance = euclidean_distance(start_point, point);
+                let moved_enough_for_idle_fallback = if idle_movement_tolerance <= 0.0 {
+                    total_distance > 0.0
+                } else {
+                    total_distance >= idle_movement_tolerance
+                };
+                if moved_enough_for_idle_fallback {
+                    state.movement_detected = true;
+                }
+
                 if !state.gesture_mode {
                     if total_distance < minimum_distance {
                         state.last_point = Some(point);
@@ -168,53 +189,97 @@ impl GestureEngine {
                 false
             }
             WM_RBUTTONUP => {
-                let final_state = {
+                let release = {
                     let mut state = self.state.lock();
-                    if !state.right_button_down {
-                        return false;
-                    }
+                    if state.normal_click_passthrough {
+                        reset_state(&mut state);
+                        MouseRelease::PassThrough
+                    } else {
+                        if !state.right_button_down {
+                            return false;
+                        }
 
-                    let snapshot = CompletedGesture {
-                        gesture_mode: state.gesture_mode,
-                        monitor: state.start_monitor,
-                        directions: normalize_gesture(&state.directions),
-                    };
-                    state.right_button_down = false;
-                    state.gesture_mode = false;
-                    state.start_monitor = None;
-                    state.start_monitor_bounds = None;
-                    state.start_point = None;
-                    state.last_point = None;
-                    state.direction_anchor = None;
-                    state.points.clear();
-                    state.directions.clear();
-                    snapshot
-                };
+                        let snapshot = CompletedGesture {
+                            gesture_mode: state.gesture_mode,
+                            monitor: state.start_monitor,
+                            directions: normalize_gesture(&state.directions),
+                        };
+                        reset_state(&mut state);
 
-                if final_state.gesture_mode {
-                    self.context.overlay().finish();
-                    if !final_state.directions.is_empty() {
-                        let process_name = final_state
-                            .monitor
-                            .and_then(foreground_process_on_monitor)
-                            .unwrap_or_default();
-                        if let Some(action) = self
-                            .context
-                            .resolve_action(&process_name, &final_state.directions)
-                        {
-                            thread::spawn(move || {
-                                let _ = actions::execute(&action);
-                            });
+                        if snapshot.gesture_mode {
+                            MouseRelease::Gesture(snapshot)
+                        } else {
+                            MouseRelease::SyntheticClick
                         }
                     }
-                } else {
-                    self.context.overlay().hide();
-                    let _ = send_right_click();
-                }
+                };
 
-                true
+                match release {
+                    MouseRelease::PassThrough => false,
+                    MouseRelease::Gesture(final_state) => {
+                        self.context.overlay().finish();
+                        if !final_state.directions.is_empty() {
+                            let process_name = final_state
+                                .monitor
+                                .and_then(foreground_process_on_monitor)
+                                .unwrap_or_default();
+                            if let Some(action) = self
+                                .context
+                                .resolve_action(&process_name, &final_state.directions)
+                            {
+                                thread::spawn(move || {
+                                    let _ = actions::execute(&action);
+                                });
+                            }
+                        }
+
+                        true
+                    }
+                    MouseRelease::SyntheticClick => {
+                        self.context.overlay().hide();
+                        let _ = send_right_click();
+                        true
+                    }
+                }
             }
             _ => false,
+        }
+    }
+
+    fn schedule_idle_right_click_fallback(&self, press_serial: u64) {
+        let Some(delay) = self.context.right_click_idle_fallback_delay() else {
+            return;
+        };
+        let Some(engine) = ENGINE.get().cloned() else {
+            return;
+        };
+
+        thread::spawn(move || {
+            thread::sleep(delay);
+            engine.trigger_idle_right_click_fallback(press_serial);
+        });
+    }
+
+    fn trigger_idle_right_click_fallback(&self, press_serial: u64) {
+        let should_replay_down = {
+            let mut state = self.state.lock();
+            if state.press_serial != press_serial
+                || !state.right_button_down
+                || state.gesture_mode
+                || state.movement_detected
+            {
+                false
+            } else {
+                arm_normal_click_passthrough(&mut state);
+                true
+            }
+        };
+
+        if should_replay_down {
+            self.context.overlay().hide();
+            if let Err(error) = send_right_button_down() {
+                eprintln!("[Gesto] failed to replay right button down: {error:#}");
+            }
         }
     }
 }
@@ -224,6 +289,31 @@ struct CompletedGesture {
     gesture_mode: bool,
     monitor: Option<MonitorToken>,
     directions: String,
+}
+
+enum MouseRelease {
+    PassThrough,
+    Gesture(CompletedGesture),
+    SyntheticClick,
+}
+
+fn reset_state(state: &mut GestureState) {
+    state.right_button_down = false;
+    state.normal_click_passthrough = false;
+    state.gesture_mode = false;
+    state.movement_detected = false;
+    state.start_monitor = None;
+    state.start_monitor_bounds = None;
+    state.start_point = None;
+    state.last_point = None;
+    state.direction_anchor = None;
+    state.points.clear();
+    state.directions.clear();
+}
+
+fn arm_normal_click_passthrough(state: &mut GestureState) {
+    reset_state(state);
+    state.normal_click_passthrough = true;
 }
 
 fn dominant_direction(
@@ -256,8 +346,18 @@ fn send_right_click() -> anyhow::Result<()> {
         mouse_input(MOUSEEVENTF_RIGHTUP),
     ];
 
+    send_mouse_inputs(&inputs)
+}
+
+fn send_right_button_down() -> anyhow::Result<()> {
+    let inputs = [mouse_input(MOUSEEVENTF_RIGHTDOWN)];
+
+    send_mouse_inputs(&inputs)
+}
+
+fn send_mouse_inputs(inputs: &[INPUT]) -> anyhow::Result<()> {
     unsafe {
-        let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+        let sent = SendInput(inputs, std::mem::size_of::<INPUT>() as i32);
         if sent != inputs.len() as u32 {
             return Err(anyhow!(
                 "SendInput sent {} of {} mouse events",

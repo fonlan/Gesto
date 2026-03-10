@@ -8,8 +8,8 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             Shell::{
-                NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
-                Shell_NotifyIconW,
+                NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+                NOTIFYICONDATAW, Shell_NotifyIconW,
             },
             WindowsAndMessaging::{
                 AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
@@ -86,6 +86,12 @@ unsafe fn add_tray_icon(hwnd: HWND) -> anyhow::Result<()> {
     Ok(())
 }
 
+unsafe fn refresh_tray_icon(hwnd: HWND) {
+    if let Ok(mut data) = tray_icon_data(hwnd) {
+        let _ = Shell_NotifyIconW(NIM_MODIFY, &mut data);
+    }
+}
+
 unsafe fn remove_tray_icon(hwnd: HWND) {
     if let Ok(mut data) = tray_icon_data(hwnd) {
         let _ = Shell_NotifyIconW(NIM_DELETE, &mut data);
@@ -96,9 +102,12 @@ fn make_int_resource(resource_id: u16) -> PCWSTR {
     PCWSTR(resource_id as usize as *const u16)
 }
 
-unsafe fn load_tray_icon(
-) -> anyhow::Result<windows::Win32::UI::WindowsAndMessaging::HICON> {
-    let hinstance = HINSTANCE(GetModuleHandleW(None).context("failed to get module handle")?.0);
+unsafe fn load_tray_icon() -> anyhow::Result<windows::Win32::UI::WindowsAndMessaging::HICON> {
+    let hinstance = HINSTANCE(
+        GetModuleHandleW(None)
+            .context("failed to get module handle")?
+            .0,
+    );
     LoadIconW(Some(hinstance), make_int_resource(APP_ICON_RESOURCE_ID))
         .or_else(|_| LoadIconW(None, IDI_APPLICATION))
         .context("failed to load tray icon")
@@ -113,7 +122,7 @@ unsafe fn tray_icon_data(hwnd: HWND) -> anyhow::Result<NOTIFYICONDATAW> {
     data.uCallbackMessage = WM_TRAYICON;
     data.hIcon = load_tray_icon()?;
 
-    let tip = to_wide("Gesto");
+    let tip = to_wide(tray_tooltip_label());
     for (index, ch) in tip
         .iter()
         .take(data.szTip.len().saturating_sub(1))
@@ -126,12 +135,15 @@ unsafe fn tray_icon_data(hwnd: HWND) -> anyhow::Result<NOTIFYICONDATAW> {
 }
 
 unsafe fn show_context_menu(hwnd: HWND) {
+    refresh_tray_icon(hwnd);
+
     let menu = match CreatePopupMenu() {
         Ok(menu) => menu,
         Err(_) => return,
     };
-    let open_text = to_wide("打开配置 / Open Config");
-    let exit_text = to_wide("退出 / Exit");
+    let (open_label, exit_label) = tray_menu_labels();
+    let open_text = to_wide(open_label);
+    let exit_text = to_wide(exit_label);
     let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_CONFIG, PCWSTR(open_text.as_ptr()));
     let _ = AppendMenuW(menu, MF_STRING, ID_EXIT, PCWSTR(exit_text.as_ptr()));
 
@@ -149,6 +161,27 @@ unsafe fn show_context_menu(hwnd: HWND) {
     );
     let _ = PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0));
     let _ = DestroyMenu(menu);
+}
+
+fn current_locale() -> String {
+    CONTEXT
+        .get()
+        .map(|context| context.config_snapshot().locale)
+        .unwrap_or_else(|| "zh-CN".to_string())
+}
+
+fn tray_tooltip_label() -> &'static str {
+    match current_locale().as_str() {
+        "en-US" => "Gesto - Mouse Gestures",
+        _ => "Gesto - 鼠标手势",
+    }
+}
+
+fn tray_menu_labels() -> (&'static str, &'static str) {
+    match current_locale().as_str() {
+        "en-US" => ("Open Config", "Exit"),
+        _ => ("打开配置", "退出"),
+    }
 }
 
 fn open_config_page() {
