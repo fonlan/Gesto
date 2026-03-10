@@ -293,7 +293,7 @@ export default function App() {
   }
 
   return (
-    <div className='min-h-screen bg-slate-100 px-4 py-4 text-slate-900 sm:px-6 sm:py-6'>
+    <div className='min-h-screen bg-slate-100 px-4 py-4 pb-28 text-slate-900 sm:px-6 sm:py-6 sm:pb-32'>
       <div className='mx-auto flex max-w-[88rem] flex-col gap-4'>
         <header className='overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-900 text-white shadow-panel'>
           <div className='flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-end lg:justify-between'>
@@ -324,21 +324,7 @@ export default function App() {
                   }))
                 }
               />
-              <button className='btn-primary w-full' onClick={saveConfig} disabled={saving} type='button'>
-                {saving ? t.saving : t.save}
-              </button>
-              {(message || error) && (
-                <div
-                  aria-live='polite'
-                  className={
-                    'rounded-2xl px-4 py-3 text-sm font-medium ' +
-                    (error ? 'bg-red-500/15 text-red-100' : 'bg-emerald-500/15 text-emerald-100')
-                  }
-                  role={error ? 'alert' : 'status'}
-                >
-                  {error || message}
-                </div>
-              )}
+
             </div>
           </div>
         </header>
@@ -699,7 +685,73 @@ export default function App() {
           </div>
         </section>
       </div>
+
+      <div className='pointer-events-none fixed bottom-5 right-3 z-40 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-3 sm:bottom-6 sm:right-[max(1.5rem,calc((100vw-88rem)/2))] sm:max-w-sm sm:translate-x-[calc(100%+1rem)]'>
+        {(message || error) && (
+          <div
+            aria-live='polite'
+            className={
+              'pointer-events-auto rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur ' +
+              (error
+                ? 'border border-red-200 bg-red-50/95 text-red-700'
+                : 'border border-emerald-200 bg-emerald-50/95 text-emerald-700')
+            }
+            role={error ? 'alert' : 'status'}
+          >
+            {error || message}
+          </div>
+        )}
+
+        <button
+          aria-label={saving ? t.saving : t.save}
+          className='pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-lg bg-blue-600 text-white shadow-[0_16px_30px_-18px_rgba(37,99,235,0.72)] transition hover:scale-[1.03] hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 disabled:cursor-not-allowed disabled:bg-slate-400 sm:h-12 sm:w-12 sm:rounded-xl'
+          disabled={saving}
+          onClick={saveConfig}
+          title={saving ? t.saving : t.save}
+          type='button'
+        >
+          <span className='sr-only'>{saving ? t.saving : t.save}</span>
+          {saving ? <SpinnerIcon /> : <SaveIcon />}
+        </button>
+      </div>
     </div>
+  )
+}
+
+function SaveIcon() {
+  return (
+    <svg aria-hidden='true' className='h-4 w-4 sm:h-5 sm:w-5' fill='none' viewBox='0 0 24 24'>
+      <path
+        d='M5 4.75h10.5L19.25 8.5v10.75H5z'
+        stroke='currentColor'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        strokeWidth='1.8'
+      />
+      <path
+        d='M8 4.75v5.5h6.5v-4'
+        stroke='currentColor'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        strokeWidth='1.8'
+      />
+      <path
+        d='M8.5 16.5h7'
+        stroke='currentColor'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        strokeWidth='1.8'
+      />
+    </svg>
+  )
+}
+
+function SpinnerIcon() {
+  return (
+    <svg aria-hidden='true' className='h-4 w-4 animate-spin sm:h-5 sm:w-5' fill='none' viewBox='0 0 24 24'>
+      <circle cx='12' cy='12' r='8.25' opacity='0.3' stroke='currentColor' strokeWidth='2.5' />
+      <path d='M20.25 12A8.25 8.25 0 0 0 12 3.75' stroke='currentColor' strokeLinecap='round' strokeWidth='2.5' />
+    </svg>
   )
 }
 
