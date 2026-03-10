@@ -9,14 +9,23 @@ use windows::{
             MonitorFromWindow,
         },
         System::Threading::{
-            OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+            AttachThreadInput, GetCurrentThreadId, OpenProcess,
+            PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
         },
         UI::{
             HiDpi::{
                 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor, MDT_EFFECTIVE_DPI,
                 SetProcessDpiAwarenessContext, SetThreadDpiAwarenessContext,
             },
-            WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, WindowFromPoint},
+            Input::KeyboardAndMouse::{
+                INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
+                SetActiveWindow, SetFocus, VK_MENU,
+            },
+            WindowsAndMessaging::{
+                BringWindowToTop, GA_ROOT, GetAncestor, GetForegroundWindow,
+                GetWindowThreadProcessId, IsIconic, IsWindow, SW_RESTORE, SetForegroundWindow,
+                ShowWindow, WindowFromPoint,
+            },
         },
     },
     core::PWSTR,
@@ -24,6 +33,15 @@ use windows::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MonitorToken(pub isize);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WindowToken(pub isize);
+
+impl WindowToken {
+    pub fn hwnd(self) -> HWND {
+        HWND(self.0 as *mut _)
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct MonitorBounds {
@@ -112,27 +130,85 @@ pub fn monitor_from_hwnd(hwnd: HWND) -> Option<MonitorToken> {
     }
 }
 
-pub fn foreground_process_on_monitor(monitor: MonitorToken) -> Option<String> {
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.0.is_null() {
-            return None;
-        }
-        if monitor_from_hwnd(hwnd)? != monitor {
-            return None;
-        }
-        process_name_for_hwnd(hwnd)
+pub fn foreground_window() -> Option<WindowToken> {
+    unsafe { normalize_window_handle(GetForegroundWindow()) }
+}
+
+pub fn foreground_window_on_monitor(monitor: MonitorToken) -> Option<WindowToken> {
+    let hwnd = foreground_window()?;
+    if monitor_from_hwnd(hwnd.hwnd())? != monitor {
+        return None;
     }
+
+    Some(hwnd)
+}
+
+pub fn gesture_target_window_for_point(point: POINT) -> Option<WindowToken> {
+    monitor_from_point(point)
+        .and_then(|(monitor, _)| foreground_window_on_monitor(monitor))
+        .or_else(|| window_at_point(point))
+}
+
+pub fn window_at_point(point: POINT) -> Option<WindowToken> {
+    unsafe { normalize_window_handle(WindowFromPoint(point)) }
 }
 
 pub fn process_name_at_point(point: POINT) -> Option<String> {
+    process_name_for_window(window_at_point(point)?)
+}
+
+pub fn process_name_for_window(window: WindowToken) -> Option<String> {
+    process_name_for_hwnd(window.hwnd())
+}
+
+pub fn activate_window(window: WindowToken) -> anyhow::Result<()> {
     unsafe {
-        let hwnd = WindowFromPoint(point);
-        if hwnd.0.is_null() {
-            return None;
+        let hwnd = window.hwnd();
+        if hwnd.0.is_null() || !IsWindow(Some(hwnd)).as_bool() {
+            return Err(anyhow!("invalid target window handle"));
         }
 
-        process_name_for_hwnd(hwnd)
+        if foreground_window() == Some(window) {
+            return Ok(());
+        }
+
+        if IsIconic(hwnd).as_bool() {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+        }
+
+        let current_thread_id = GetCurrentThreadId();
+        let target_thread_id = GetWindowThreadProcessId(hwnd, None);
+        let current_foreground = GetForegroundWindow();
+        let foreground_thread_id = if current_foreground.0.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(current_foreground, None)
+        };
+
+        let attached_thread_ids = attach_input_threads(
+            current_thread_id,
+            &[foreground_thread_id, target_thread_id],
+        );
+
+        let _ = try_focus_window(hwnd);
+        if foreground_window() == Some(window) {
+            detach_input_threads(current_thread_id, &attached_thread_ids);
+            return Ok(());
+        }
+
+        let _ = tap_alt_key();
+        let _ = try_focus_window(hwnd);
+        let activated = foreground_window() == Some(window);
+
+        detach_input_threads(current_thread_id, &attached_thread_ids);
+
+        if activated {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "failed to activate target window after attach-thread-input fallback"
+            ))
+        }
     }
 }
 
@@ -166,6 +242,92 @@ pub fn process_name_for_hwnd(hwnd: HWND) -> Option<String> {
         Path::new(&full_path)
             .file_name()
             .map(|name| name.to_string_lossy().to_ascii_lowercase())
+    }
+}
+
+unsafe fn try_focus_window(hwnd: HWND) -> anyhow::Result<()> {
+    let _ = BringWindowToTop(hwnd);
+    let _ = SetActiveWindow(hwnd);
+    let _ = SetFocus(Some(hwnd));
+
+    if SetForegroundWindow(hwnd).as_bool() {
+        return Ok(());
+    }
+
+    Err(anyhow!("SetForegroundWindow rejected target window"))
+}
+
+unsafe fn attach_input_threads(current_thread_id: u32, thread_ids: &[u32]) -> Vec<u32> {
+    let mut attached = Vec::new();
+
+    for thread_id in thread_ids {
+        if *thread_id == 0 || *thread_id == current_thread_id || attached.contains(thread_id) {
+            continue;
+        }
+
+        if AttachThreadInput(current_thread_id, *thread_id, true).as_bool() {
+            attached.push(*thread_id);
+        }
+    }
+
+    attached
+}
+
+unsafe fn detach_input_threads(current_thread_id: u32, thread_ids: &[u32]) {
+    for thread_id in thread_ids {
+        let _ = AttachThreadInput(current_thread_id, *thread_id, false);
+    }
+}
+
+unsafe fn tap_alt_key() -> anyhow::Result<()> {
+    let inputs = [
+        keyboard_input(VK_MENU, Default::default()),
+        keyboard_input(VK_MENU, KEYEVENTF_KEYUP),
+    ];
+
+    let sent = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+    if sent != inputs.len() as u32 {
+        return Err(anyhow!(
+            "SendInput sent {} of {} events while unlocking foreground",
+            sent,
+            inputs.len()
+        ));
+    }
+
+    Ok(())
+}
+
+fn keyboard_input(
+    vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY,
+    flags: windows::Win32::UI::Input::KeyboardAndMouse::KEYBD_EVENT_FLAGS,
+) -> INPUT {
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    }
+}
+
+fn normalize_window_handle(hwnd: HWND) -> Option<WindowToken> {
+    unsafe {
+        if hwnd.0.is_null() || !IsWindow(Some(hwnd)).as_bool() {
+            return None;
+        }
+
+        let root = GetAncestor(hwnd, GA_ROOT);
+        let hwnd = if root.0.is_null() { hwnd } else { root };
+        if hwnd.0.is_null() || !IsWindow(Some(hwnd)).as_bool() {
+            return None;
+        }
+
+        Some(WindowToken(hwnd.0 as isize))
     }
 }
 

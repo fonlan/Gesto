@@ -1,4 +1,8 @@
-use std::process::Command;
+use std::{
+    process::Command,
+    thread,
+    time::Duration,
+};
 
 use anyhow::{Context, anyhow};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -10,9 +14,13 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use crate::{
     config::{GestureAction, HotkeySpec},
     logging,
+    win::{WindowToken, activate_window, foreground_window},
 };
 
-pub fn execute(action: &GestureAction) -> anyhow::Result<()> {
+const HOTKEY_TARGET_SETTLE_DELAY_MS: u64 = 40;
+const HOTKEY_FOREGROUND_RESTORE_DELAY_MS: u64 = 150;
+
+pub fn execute(action: &GestureAction, target_window: Option<WindowToken>) -> anyhow::Result<()> {
     match action {
         GestureAction::None => Ok(()),
         GestureAction::Shell { command } => {
@@ -24,7 +32,7 @@ pub fn execute(action: &GestureAction) -> anyhow::Result<()> {
             Ok(())
         }
         GestureAction::Hotkey { hotkey } => {
-            send_hotkey(hotkey)?;
+            send_hotkey(hotkey, target_window)?;
             logging::info(format!(
                 "sent hotkey action: {}+{}",
                 hotkey.modifiers.join("+"),
@@ -35,7 +43,42 @@ pub fn execute(action: &GestureAction) -> anyhow::Result<()> {
     }
 }
 
-fn send_hotkey(spec: &HotkeySpec) -> anyhow::Result<()> {
+fn send_hotkey(spec: &HotkeySpec, target_window: Option<WindowToken>) -> anyhow::Result<()> {
+    let restore_window = if let Some(target_window) = target_window {
+        let current_foreground = foreground_window();
+        if current_foreground != Some(target_window) {
+            activate_window(target_window)
+                .context("failed to activate target window for hotkey delivery")?;
+            thread::sleep(Duration::from_millis(HOTKEY_TARGET_SETTLE_DELAY_MS));
+            current_foreground
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let result = send_hotkey_inputs(spec);
+
+    if let Some(window) = restore_window {
+        schedule_foreground_restore(window);
+    }
+
+    result
+}
+
+fn schedule_foreground_restore(window: WindowToken) {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(HOTKEY_FOREGROUND_RESTORE_DELAY_MS));
+        if let Err(error) = activate_window(window) {
+            logging::warn(format!(
+                "failed to restore previous foreground window after hotkey: {error:#}"
+            ));
+        }
+    });
+}
+
+fn send_hotkey_inputs(spec: &HotkeySpec) -> anyhow::Result<()> {
     let mut inputs = Vec::new();
     let mut modifier_keys = Vec::new();
 

@@ -1,35 +1,40 @@
-use std::{sync::Arc, thread};
+use std::{collections::VecDeque, sync::Arc, thread};
 
 use anyhow::{Context, anyhow};
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use parking_lot::Mutex;
 use windows::Win32::{
     Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM},
-    System::LibraryLoader::GetModuleHandleW,
+    System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
     UI::Input::KeyboardAndMouse::{
         INPUT, INPUT_0, INPUT_MOUSE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP,
         MOUSEINPUT, SendInput,
     },
     UI::WindowsAndMessaging::{
         CallNextHookEx, GetMessageW, HC_ACTION, LLMHF_INJECTED, MSG, MSLLHOOKSTRUCT,
-        SetWindowsHookExW, UnhookWindowsHookEx, WH_MOUSE_LL, WM_MOUSEMOVE, WM_RBUTTONDOWN,
-        WM_RBUTTONUP,
+        PostThreadMessageW, SetWindowsHookExW, UnhookWindowsHookEx, WH_MOUSE_LL, WM_APP,
+        WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_RBUTTONUP,
     },
 };
 
 use crate::{
     actions,
     app::AppContext,
-    config::normalize_gesture,
+    config::{GestureAction, normalize_gesture},
     logging,
     win::{
-        MonitorBounds, ensure_current_thread_per_monitor_dpi_awareness,
-        foreground_process_on_monitor, monitor_from_point, monitor_scale_factor,
-        process_name_at_point,
+        MonitorBounds, WindowToken, ensure_current_thread_per_monitor_dpi_awareness,
+        gesture_target_window_for_point, monitor_from_point, monitor_scale_factor,
+        process_name_at_point, process_name_for_window,
     },
 };
 
 static ENGINE: OnceCell<Arc<GestureEngine>> = OnceCell::new();
+static HOOK_THREAD_ID: OnceCell<u32> = OnceCell::new();
+static PENDING_ACTIONS: Lazy<Mutex<VecDeque<PendingAction>>> =
+    Lazy::new(|| Mutex::new(VecDeque::new()));
+
+const WM_EXECUTE_GESTURE_ACTION: u32 = WM_APP + 41;
 
 pub fn start_global_hook(context: Arc<AppContext>) -> anyhow::Result<()> {
     let engine = Arc::new(GestureEngine::new(context));
@@ -50,6 +55,7 @@ pub fn start_global_hook(context: Arc<AppContext>) -> anyhow::Result<()> {
 fn hook_loop() -> anyhow::Result<()> {
     unsafe {
         ensure_current_thread_per_monitor_dpi_awareness();
+        let _ = HOOK_THREAD_ID.set(GetCurrentThreadId());
 
         let hinstance = GetModuleHandleW(None).context("failed to load current module handle")?;
         let hook = SetWindowsHookExW(
@@ -61,7 +67,11 @@ fn hook_loop() -> anyhow::Result<()> {
         .map_err(|_| anyhow!("failed to install WH_MOUSE_LL hook"))?;
 
         let mut message = MSG::default();
-        while GetMessageW(&mut message, None, 0, 0).as_bool() {}
+        while GetMessageW(&mut message, None, 0, 0).as_bool() {
+            if message.message == WM_EXECUTE_GESTURE_ACTION {
+                run_pending_actions();
+            }
+        }
 
         UnhookWindowsHookEx(hook).context("failed to uninstall mouse hook")?;
         Ok(())
@@ -80,11 +90,19 @@ struct GestureState {
     minimum_distance: f32,
     start_monitor_bounds: Option<MonitorBounds>,
     start_process_name: Option<String>,
+    start_target_window: Option<WindowToken>,
     start_point: Option<windows::Win32::Foundation::POINT>,
     last_point: Option<windows::Win32::Foundation::POINT>,
     direction_anchor: Option<windows::Win32::Foundation::POINT>,
     points: Vec<windows::Win32::Foundation::POINT>,
     directions: String,
+}
+
+struct PendingAction {
+    action: GestureAction,
+    process_name: String,
+    directions: String,
+    target_window: Option<WindowToken>,
 }
 
 impl GestureEngine {
@@ -114,8 +132,8 @@ impl GestureEngine {
                     .map(|(monitor, _)| base_minimum_distance * monitor_scale_factor(monitor))
                     .unwrap_or(base_minimum_distance);
                 let point_process_name = process_name_at_point(point);
-                let start_process_name =
-                    start_monitor.and_then(|(monitor, _)| foreground_process_on_monitor(monitor));
+                let start_target_window = gesture_target_window_for_point(point);
+                let start_process_name = start_target_window.and_then(process_name_for_window);
 
                 if point_process_name
                     .as_deref()
@@ -125,7 +143,7 @@ impl GestureEngine {
                         .is_some_and(|process_name| self.context.is_process_ignored(process_name))
                 {
                     logging::info(format!(
-                        "bypassing gesture interception for ignored process: point={:?}, foreground={:?}",
+                        "bypassing gesture interception for ignored process: point={:?}, target={:?}",
                         point_process_name, start_process_name
                     ));
                     return false;
@@ -140,6 +158,7 @@ impl GestureEngine {
                     state.last_point = Some(point);
                     state.direction_anchor = Some(point);
                     state.start_process_name = start_process_name;
+                    state.start_target_window = start_target_window;
                     state.points.clear();
                     state.points.push(point);
                     state.directions.clear();
@@ -211,6 +230,7 @@ impl GestureEngine {
                     let snapshot = CompletedGesture {
                         gesture_mode: state.gesture_mode,
                         process_name: state.start_process_name.clone().unwrap_or_default(),
+                        target_window: state.start_target_window,
                         directions: normalize_gesture(&state.directions),
                     };
                     reset_state(&mut state);
@@ -236,14 +256,17 @@ impl GestureEngine {
                                     "recognized gesture '{}' for process '{}'",
                                     directions, process_name
                                 ));
-                                thread::spawn(move || {
-                                    if let Err(error) = actions::execute(&action) {
-                                        logging::error(format!(
-                                            "failed to execute gesture '{}' for process '{}': {error:#}",
-                                            directions, process_name
-                                        ));
-                                    }
-                                });
+                                if let Err(error) = queue_pending_action(PendingAction {
+                                    action,
+                                    process_name,
+                                    directions,
+                                    target_window: final_state.target_window,
+                                }) {
+                                    logging::error(format!(
+                                        "failed to queue gesture action '{}': {error:#}",
+                                        final_state.directions
+                                    ));
+                                }
                             } else {
                                 logging::warn(format!(
                                     "no action resolved for gesture '{}' in process '{}'",
@@ -272,6 +295,7 @@ impl GestureEngine {
 struct CompletedGesture {
     gesture_mode: bool,
     process_name: String,
+    target_window: Option<WindowToken>,
     directions: String,
 }
 
@@ -280,12 +304,43 @@ enum MouseRelease {
     SyntheticClick,
 }
 
+fn queue_pending_action(action: PendingAction) -> anyhow::Result<()> {
+    let hook_thread_id = *HOOK_THREAD_ID
+        .get()
+        .ok_or_else(|| anyhow!("gesture hook thread is not ready"))?;
+
+    PENDING_ACTIONS.lock().push_back(action);
+    unsafe {
+        PostThreadMessageW(hook_thread_id, WM_EXECUTE_GESTURE_ACTION, WPARAM(0), LPARAM(0))
+            .context("failed to post gesture action message")?;
+    }
+
+    Ok(())
+}
+
+fn run_pending_actions() {
+    loop {
+        let pending = PENDING_ACTIONS.lock().pop_front();
+        let Some(pending) = pending else {
+            break;
+        };
+
+        if let Err(error) = actions::execute(&pending.action, pending.target_window) {
+            logging::error(format!(
+                "failed to execute gesture '{}' for process '{}': {error:#}",
+                pending.directions, pending.process_name
+            ));
+        }
+    }
+}
+
 fn reset_state(state: &mut GestureState) {
     state.right_button_down = false;
     state.gesture_mode = false;
     state.minimum_distance = 0.0;
     state.start_monitor_bounds = None;
     state.start_process_name = None;
+    state.start_target_window = None;
     state.start_point = None;
     state.last_point = None;
     state.direction_anchor = None;
