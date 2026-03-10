@@ -64,6 +64,7 @@ async fn get_status(State(context): State<Arc<AppContext>>) -> Json<StatusPayloa
     Json(StatusPayload {
         server_url: context.server_url(),
         config_path: context.config_path(),
+        log_path: context.log_path(),
         port: context.port(),
         app_name: "Gesto".to_string(),
     })
@@ -141,6 +142,7 @@ fn internal_error(locale: &str, error: anyhow::Error) -> (StatusCode, String) {
 struct StatusPayload {
     server_url: String,
     config_path: String,
+    log_path: String,
     port: u16,
     app_name: String,
 }

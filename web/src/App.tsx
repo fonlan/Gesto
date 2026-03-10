@@ -455,11 +455,12 @@ export default function App() {
 
           <section className='panel xl:sticky xl:top-4 xl:h-fit'>
             <h2 className='text-lg font-semibold text-slate-900'>{t.status}</h2>
-            <div className='mt-4 space-y-3 text-sm'>
-              <InfoRow label={t.serverUrl} value={status?.serverUrl ?? '-'} />
-              <InfoRow label={t.configPath} value={status?.configPath ?? '-'} />
-            </div>
-          </section>
+              <div className='mt-4 space-y-3 text-sm'>
+                <InfoRow label={t.serverUrl} value={status?.serverUrl ?? '-'} />
+                <InfoRow label={t.configPath} value={status?.configPath ?? '-'} />
+                <InfoRow label={t.logPath} value={status?.logPath ?? '-'} />
+              </div>
+            </section>
         </div>
 
         <section className='panel'>

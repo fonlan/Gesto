@@ -45,6 +45,7 @@ export interface HotkeySpec {
 export interface StatusPayload {
   serverUrl: string
   configPath: string
+  logPath: string
   port: number
   appName: string
 }

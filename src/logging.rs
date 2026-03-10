@@ -2,7 +2,7 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     panic,
-    path::PathBuf,
+    path::{Path, PathBuf},
     thread,
 };
 
@@ -50,6 +50,11 @@ pub fn install_panic_hook() {
     }));
 }
 
+pub fn current_log_path(dir: impl AsRef<Path>) -> PathBuf {
+    let now = Local::now();
+    dir.as_ref().join(format!("{}.log", now.format("%Y-%m-%d")))
+}
+
 pub fn info(message: impl AsRef<str>) {
     write("INFO", message.as_ref());
 }
@@ -73,8 +78,7 @@ fn write(level: &str, message: &str) {
 
 fn write_lines(dir: &PathBuf, level: &str, message: &str) -> anyhow::Result<()> {
     let now = Local::now();
-    let file_name = format!("{}.log", now.format("%Y-%m-%d"));
-    let path = dir.join(file_name);
+    let path = current_log_path(dir);
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)

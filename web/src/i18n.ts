@@ -26,6 +26,7 @@ export interface I18nText {
   status: string
   serverUrl: string
   configPath: string
+  logPath: string
   defaultRules: string
   appRules: string
   processRulesHint: string
@@ -82,6 +83,7 @@ export const messages: Record<Locale, I18nText> = {
     status: '运行状态',
     serverUrl: '服务地址',
     configPath: '配置文件',
+    logPath: '日志文件',
     defaultRules: '全局默认手势',
     appRules: '按程序定制',
     processRulesHint: '左侧选择进程，右侧编辑该进程对应的手势规则；未命中特定程序时会回退到全局规则。',
@@ -136,6 +138,7 @@ export const messages: Record<Locale, I18nText> = {
     status: 'Runtime Status',
     serverUrl: 'Server URL',
     configPath: 'Config File',
+    logPath: 'Log File',
     defaultRules: 'Default Gestures',
     appRules: 'Per-App Rules',
     processRulesHint: 'Select a process on the left and edit its gesture rules on the right; unmatched apps fall back to the global rule.',

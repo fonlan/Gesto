@@ -73,6 +73,12 @@ impl AppContext {
         self.store.path().display().to_string()
     }
 
+    pub fn log_path(&self) -> String {
+        logging::current_log_path(self.store.logs_dir())
+            .display()
+            .to_string()
+    }
+
     pub fn overlay(&self) -> OverlayController {
         self.overlay.clone()
     }
