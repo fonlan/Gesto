@@ -19,7 +19,8 @@ struct Logger {
 static LOGGER: OnceCell<Logger> = OnceCell::new();
 
 pub fn init(dir: PathBuf) -> anyhow::Result<()> {
-    fs::create_dir_all(&dir).with_context(|| format!("failed to create logs directory: {}", dir.display()))?;
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create logs directory: {}", dir.display()))?;
     LOGGER
         .set(Logger {
             dir: dir.clone(),

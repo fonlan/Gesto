@@ -126,8 +126,7 @@ impl GestureEngine {
                 {
                     logging::info(format!(
                         "bypassing gesture interception for ignored process: point={:?}, foreground={:?}",
-                        point_process_name,
-                        start_process_name
+                        point_process_name, start_process_name
                     ));
                     return false;
                 }
@@ -235,23 +234,20 @@ impl GestureEngine {
                                 let directions = final_state.directions.clone();
                                 logging::info(format!(
                                     "recognized gesture '{}' for process '{}'",
-                                    directions,
-                                    process_name
+                                    directions, process_name
                                 ));
                                 thread::spawn(move || {
                                     if let Err(error) = actions::execute(&action) {
                                         logging::error(format!(
                                             "failed to execute gesture '{}' for process '{}': {error:#}",
-                                            directions,
-                                            process_name
+                                            directions, process_name
                                         ));
                                     }
                                 });
                             } else {
                                 logging::warn(format!(
                                     "no action resolved for gesture '{}' in process '{}'",
-                                    final_state.directions,
-                                    final_state.process_name
+                                    final_state.directions, final_state.process_name
                                 ));
                             }
                         }

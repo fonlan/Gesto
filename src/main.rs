@@ -57,7 +57,9 @@ fn run(store: ConfigStore) -> anyhow::Result<()> {
         .block_on(http_server::spawn(context.clone()))
         .context("failed to start local web server")?;
     context.set_port(port);
-    logging::info(format!("local web server listening on http://127.0.0.1:{port}"));
+    logging::info(format!(
+        "local web server listening on http://127.0.0.1:{port}"
+    ));
 
     tray::run(context).context("tray loop exited unexpectedly")?;
     logging::info("tray loop exited");
