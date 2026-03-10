@@ -1,4 +1,5 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
+import appIconUrl from '../../logo.png'
 
 import { messages, type I18nText } from './i18n'
 import type {
@@ -296,8 +297,9 @@ export default function App() {
         <header className='overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-900 text-white shadow-panel'>
           <div className='flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-end lg:justify-between'>
             <div className='space-y-3'>
-              <div className='inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50'>
-                Gesto
+              <div className='inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50'>
+                <img alt='' aria-hidden='true' className='h-5 w-5 rounded-md shadow-sm' src={appIconUrl} />
+                <span>Gesto</span>
               </div>
               <div>
                 <h1 className='text-2xl font-semibold sm:text-3xl'>{t.title}</h1>
@@ -1082,3 +1084,4 @@ function HotkeyRecorder(props: {
     </div>
   )
 }
+
