@@ -233,6 +233,9 @@ export default function App() {
 
   const selectedRuleIndex = config?.appRules.findIndex((rule) => rule.id === selectedRuleId) ?? -1
   const selectedRule = selectedRuleIndex >= 0 && config ? config.appRules[selectedRuleIndex] : null
+  const totalBindings =
+    (config?.defaultActions.length ?? 0) +
+    (config?.appRules.reduce((count, rule) => count + rule.gestures.length, 0) ?? 0)
 
   const saveConfig = async () => {
     if (!config) {
@@ -271,44 +274,54 @@ export default function App() {
   }
 
   return (
-    <div className='min-h-screen bg-slate-100 px-4 py-8 text-slate-900 sm:px-8'>
-      <div className='mx-auto flex max-w-7xl flex-col gap-6'>
-        <header className='flex flex-col gap-4 rounded-[2rem] bg-gradient-to-r from-slate-900 via-blue-900 to-cyan-700 px-8 py-8 text-white shadow-panel'>
-          <div className='flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between'>
-            <div>
-              <div className='mb-2 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100'>
+    <div className='min-h-screen bg-slate-100 px-4 py-4 text-slate-900 sm:px-6 sm:py-6'>
+      <div className='mx-auto flex max-w-[88rem] flex-col gap-4'>
+        <header className='overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-900 text-white shadow-panel'>
+          <div className='flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-end lg:justify-between'>
+            <div className='space-y-3'>
+              <div className='inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-50'>
                 Gesto
               </div>
-              <h1 className='text-3xl font-bold sm:text-4xl'>{t.title}</h1>
-              <p className='mt-2 max-w-3xl text-sm leading-6 text-cyan-50/90'>{t.subtitle}</p>
-            </div>
-            <button className='btn-primary' onClick={saveConfig} disabled={saving}>
-              {saving ? t.saving : t.save}
-            </button>
-          </div>
-          {(message || error) && (
-            <div
-              className={
-                'rounded-2xl px-4 py-3 text-sm font-medium ' +
-                (error ? 'bg-red-500/15 text-red-100' : 'bg-emerald-500/15 text-emerald-100')
-              }
-            >
-              {error || message}
-            </div>
-          )}
-        </header>
-
-        <div className='grid gap-6 xl:grid-cols-[1.2fr_0.8fr]'>
-          <section className='panel'>
-            <div className='mb-6 flex items-center justify-between'>
               <div>
-                <h2 className='text-xl font-semibold'>{t.globalSettings}</h2>
-                <p className='mt-1 text-sm text-slate-500'>{t.directionHint}</p>
+                <h1 className='text-2xl font-semibold sm:text-3xl'>{t.title}</h1>
+                <p className='mt-1 max-w-3xl text-sm leading-6 text-cyan-50/80'>{t.subtitle}</p>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <OverviewStat label={t.defaultRules} value={config.defaultActions.length} />
+                <OverviewStat label={t.appRules} value={config.appRules.length} />
+                <OverviewStat label={t.gesture} value={totalBindings} />
               </div>
             </div>
-            <div className='grid gap-5 md:grid-cols-2'>
-              <div>
-                <label className='field-label'>{t.language}</label>
+            <div className='flex w-full flex-col gap-3 lg:w-auto lg:min-w-[15rem] lg:max-w-sm'>
+              <button className='btn-primary w-full' onClick={saveConfig} disabled={saving} type='button'>
+                {saving ? t.saving : t.save}
+              </button>
+              {(message || error) && (
+                <div
+                  aria-live='polite'
+                  className={
+                    'rounded-2xl px-4 py-3 text-sm font-medium ' +
+                    (error ? 'bg-red-500/15 text-red-100' : 'bg-emerald-500/15 text-emerald-100')
+                  }
+                  role={error ? 'alert' : 'status'}
+                >
+                  {error || message}
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <div className='grid gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]'>
+          <section className='panel'>
+            <div className='border-b border-slate-100 pb-4'>
+              <h2 className='text-lg font-semibold text-slate-900'>{t.globalSettings}</h2>
+              <p className='mt-1 text-sm text-slate-500'>{t.directionHint}</p>
+            </div>
+
+            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
+              <label className='setting-card'>
+                <span className='field-label'>{t.language}</span>
                 <select
                   className='text-input'
                   value={config.locale}
@@ -319,11 +332,12 @@ export default function App() {
                   <option value='zh-CN'>简体中文</option>
                   <option value='en-US'>English</option>
                 </select>
-              </div>
-              <div>
-                <label className='field-label'>{t.trailColor}</label>
+              </label>
+
+              <label className='setting-card'>
+                <span className='field-label'>{t.trailColor}</span>
                 <input
-                  className='h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2'
+                  className='h-11 w-full rounded-xl border border-slate-200 bg-white px-2 py-2'
                   type='color'
                   value={config.general.trailColor}
                   onChange={(event) =>
@@ -333,8 +347,30 @@ export default function App() {
                     }))
                   }
                 />
-              </div>
+              </label>
+
+              <label className='setting-card flex cursor-pointer items-center justify-between gap-4'>
+                <div>
+                  <span className='field-label'>{t.autostart}</span>
+                  <span className='text-sm font-medium text-slate-700'>
+                    {config.general.autostart ? '✓' : '—'}
+                  </span>
+                </div>
+                <input
+                  type='checkbox'
+                  className='h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500'
+                  checked={config.general.autostart}
+                  onChange={(event) =>
+                    patchConfig((current) => ({
+                      ...current,
+                      general: { ...current.general, autostart: event.target.checked }
+                    }))
+                  }
+                />
+              </label>
+
               <SliderNumberField
+                className='lg:col-span-2'
                 label={t.trailOpacity}
                 min={0}
                 max={100}
@@ -347,6 +383,7 @@ export default function App() {
                   }))
                 }
               />
+
               <NumberField
                 label={t.trailWidth}
                 min={1}
@@ -360,6 +397,7 @@ export default function App() {
                   }))
                 }
               />
+
               <NumberField
                 label={t.minimumDistance}
                 min={8}
@@ -373,6 +411,7 @@ export default function App() {
                   }))
                 }
               />
+
               <NumberField
                 label={t.fadeDuration}
                 min={60}
@@ -386,6 +425,7 @@ export default function App() {
                   }))
                 }
               />
+
               <NumberField
                 label={t.rightClickIdleFallback}
                 min={0}
@@ -399,6 +439,7 @@ export default function App() {
                   }))
                 }
               />
+
               <NumberField
                 label={t.rightClickIdleMovementTolerance}
                 min={0}
@@ -412,10 +453,11 @@ export default function App() {
                   }))
                 }
               />
-              <div className='md:col-span-2'>
-                <label className='field-label'>{t.ignoredProcessNames}</label>
+
+              <label className='setting-card lg:col-span-3'>
+                <span className='field-label'>{t.ignoredProcessNames}</span>
                 <textarea
-                  className='text-input min-h-24 resize-y'
+                  className='text-input min-h-20 resize-y'
                   value={config.general.ignoredProcessNames.join(', ')}
                   onChange={(event) =>
                     patchConfig((current) => ({
@@ -427,33 +469,14 @@ export default function App() {
                     }))
                   }
                 />
-                <p className='mt-2 text-sm text-slate-500'>{t.ignoredProcessHint}</p>
-              </div>
-              <div className='flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3'>
-                <div>
-                  <div className='text-sm font-medium text-slate-700'>{t.autostart}</div>
-                </div>
-                <label className='inline-flex cursor-pointer items-center gap-3'>
-                  <span className='text-sm text-slate-500'>{config.general.autostart ? 'On' : 'Off'}</span>
-                  <input
-                    type='checkbox'
-                    className='h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500'
-                    checked={config.general.autostart}
-                    onChange={(event) =>
-                      patchConfig((current) => ({
-                        ...current,
-                        general: { ...current.general, autostart: event.target.checked }
-                      }))
-                    }
-                  />
-                </label>
-              </div>
+                <span className='mt-2 block text-xs leading-5 text-slate-500'>{t.ignoredProcessHint}</span>
+              </label>
             </div>
           </section>
 
-          <section className='panel'>
-            <h2 className='text-xl font-semibold'>{t.status}</h2>
-            <div className='mt-5 space-y-4 text-sm'>
+          <section className='panel xl:sticky xl:top-4 xl:h-fit'>
+            <h2 className='text-lg font-semibold text-slate-900'>{t.status}</h2>
+            <div className='mt-4 space-y-3 text-sm'>
               <InfoRow label={t.serverUrl} value={status?.serverUrl ?? '-'} />
               <InfoRow label={t.configPath} value={status?.configPath ?? '-'} />
             </div>
@@ -461,69 +484,71 @@ export default function App() {
         </div>
 
         <section className='panel'>
-          <div className='mb-5 flex items-center justify-between'>
+          <div className='flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between'>
             <div>
-              <h2 className='text-xl font-semibold'>{t.appRules}</h2>
+              <h2 className='text-lg font-semibold text-slate-900'>{t.appRules}</h2>
               <p className='mt-1 text-sm text-slate-500'>{t.processRulesHint}</p>
             </div>
             <button
-              className='btn-secondary'
+              className='btn-secondary shrink-0'
               onClick={() => {
                 const nextRule = createEmptyRule()
                 setSelectedRuleId(nextRule.id)
                 patchConfig((current) => ({ ...current, appRules: [...current.appRules, nextRule] }))
               }}
+              type='button'
             >
               {t.addRule}
             </button>
           </div>
 
-          <div className='grid gap-5 xl:grid-cols-[19rem_minmax(0,1fr)]'>
-            <div className='rounded-[1.75rem] border border-slate-200 bg-slate-50 p-3 shadow-sm xl:sticky xl:top-6 xl:max-h-[70vh]'>
-              <div className='max-h-[calc(70vh-1.5rem)] space-y-3 overflow-y-auto pr-1'>
-              <ProcessRuleListItem
-                title={t.globalProcessName}
-                subtitle={t.globalProcessHint}
-                processNames={[]}
-                selected={selectedRuleId === GLOBAL_RULE_ID}
-                onClick={() => setSelectedRuleId(GLOBAL_RULE_ID)}
-              />
-
-              {config.appRules.map((rule) => (
+          <div className='mt-4 grid gap-4 xl:grid-cols-[16rem_minmax(0,1fr)]'>
+            <div className='rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-2.5 shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)]'>
+              <div className='max-h-[calc(100vh-15rem)] space-y-2 overflow-y-auto pr-1'>
                 <ProcessRuleListItem
-                  key={rule.id}
-                  title={formatProcessNames(rule.processNames, t.emptyProcessNames)}
-                  subtitle={rule.name.trim() || t.unnamedRule}
-                  processNames={rule.processNames}
-                  selected={selectedRuleId === rule.id}
-                  onClick={() => setSelectedRuleId(rule.id)}
+                  title={t.globalProcessName}
+                  subtitle={t.globalProcessHint}
+                  processNames={[]}
+                  selected={selectedRuleId === GLOBAL_RULE_ID}
+                  onClick={() => setSelectedRuleId(GLOBAL_RULE_ID)}
                 />
-              ))}
+
+                {config.appRules.map((rule) => (
+                  <ProcessRuleListItem
+                    key={rule.id}
+                    title={formatProcessNames(rule.processNames, t.emptyProcessNames)}
+                    subtitle={rule.name.trim() || t.unnamedRule}
+                    processNames={rule.processNames}
+                    selected={selectedRuleId === rule.id}
+                    onClick={() => setSelectedRuleId(rule.id)}
+                  />
+                ))}
               </div>
             </div>
 
-            <div className='rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5'>
+            <div className='rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-4'>
               {selectedRuleId === GLOBAL_RULE_ID || !selectedRule ? (
                 <>
-                  <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+                  <div className='flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between'>
                     <div>
                       <h3 className='text-lg font-semibold text-slate-900'>{t.defaultRules}</h3>
                       <p className='mt-1 text-sm text-slate-500'>{t.globalProcessHint}</p>
                     </div>
                     <button
-                      className='btn-secondary'
+                      className='btn-secondary shrink-0'
                       onClick={() =>
                         patchConfig((current) => ({
                           ...current,
                           defaultActions: [...current.defaultActions, createEmptyBinding()]
                         }))
                       }
+                      type='button'
                     >
                       {t.addBinding}
                     </button>
                   </div>
 
-                  <div className='mt-5 space-y-4'>
+                  <div className='mt-4 space-y-3'>
                     {config.defaultActions.map((binding, index) => (
                       <BindingEditor
                         key={'default-' + index}
@@ -549,13 +574,13 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <div className='flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between'>
+                  <div className='flex flex-col gap-3 border-b border-slate-200 pb-4 xl:flex-row xl:items-start xl:justify-between'>
                     <div>
                       <h3 className='text-lg font-semibold text-slate-900'>{getRuleEditorTitle(selectedRule, t)}</h3>
                       <p className='mt-1 text-sm text-slate-500'>{t.processHint}</p>
                     </div>
                     <button
-                      className='btn-danger xl:min-w-28'
+                      className='btn-danger xl:min-w-24'
                       onClick={() => {
                         setSelectedRuleId(GLOBAL_RULE_ID)
                         patchConfig((current) => ({
@@ -563,15 +588,18 @@ export default function App() {
                           appRules: current.appRules.filter((item) => item.id !== selectedRule.id)
                         }))
                       }}
+                      type='button'
                     >
                       {t.delete}
                     </button>
                   </div>
 
-                  <div className='mt-5 grid gap-4 lg:grid-cols-[1fr_1.4fr]'>
-                    <div>
-                      <label className='field-label'>{t.ruleName}</label>
+                  <div className='mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]'>
+                    <label className='setting-card'>
+                      <span className='field-label'>{t.ruleName}</span>
                       <input
+                        aria-label={t.ruleName}
+                        autoComplete='off'
                         className='text-input'
                         value={selectedRule.name}
                         onChange={(event) =>
@@ -583,10 +611,13 @@ export default function App() {
                           }))
                         }
                       />
-                    </div>
-                    <div>
-                      <label className='field-label'>{t.processNames}</label>
+                    </label>
+
+                    <label className='setting-card'>
+                      <span className='field-label'>{t.processNames}</span>
                       <input
+                        aria-label={t.processNames}
+                        autoComplete='off'
                         className='text-input'
                         value={selectedRule.processNames.join(', ')}
                         onChange={(event) => {
@@ -600,10 +631,10 @@ export default function App() {
                           }))
                         }}
                       />
-                    </div>
+                    </label>
                   </div>
 
-                  <div className='mt-5 space-y-4'>
+                  <div className='mt-4 space-y-3'>
                     {selectedRule.gestures.map((binding, bindingIndex) => (
                       <BindingEditor
                         key={selectedRule.id + '-' + bindingIndex}
@@ -653,6 +684,7 @@ export default function App() {
                         )
                       }))
                     }
+                    type='button'
                   >
                     {t.addBinding}
                   </button>
@@ -667,6 +699,7 @@ export default function App() {
 }
 
 function SliderNumberField(props: {
+  className?: string
   label: string
   value: number
   min: number
@@ -675,11 +708,11 @@ function SliderNumberField(props: {
   onChange: (value: number) => void
 }) {
   return (
-    <div>
-      <label className='field-label'>{props.label}</label>
-      <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
+    <label className={'setting-card ' + (props.className ?? '')}>
+      <span className='field-label'>{props.label}</span>
+      <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
         <input
-          className='h-2 min-w-0 w-full flex-1 cursor-pointer accent-blue-600'
+          className='h-1.5 min-w-0 w-full flex-1 cursor-pointer accent-blue-600'
           type='range'
           min={props.min}
           max={props.max}
@@ -688,7 +721,9 @@ function SliderNumberField(props: {
           onChange={(event) => props.onChange(Number(event.target.value))}
         />
         <input
-          className='text-input w-full shrink-0 sm:w-24'
+          aria-label={props.label}
+          autoComplete='off'
+          className='text-input w-full shrink-0 sm:w-20'
           type='number'
           min={props.min}
           max={props.max}
@@ -697,11 +732,12 @@ function SliderNumberField(props: {
           onChange={(event) => props.onChange(Number(event.target.value))}
         />
       </div>
-    </div>
+    </label>
   )
 }
 
 function NumberField(props: {
+  className?: string
   label: string
   value: number
   min: number
@@ -710,9 +746,11 @@ function NumberField(props: {
   onChange: (value: number) => void
 }) {
   return (
-    <div>
-      <label className='field-label'>{props.label}</label>
+    <label className={'setting-card ' + (props.className ?? '')}>
+      <span className='field-label'>{props.label}</span>
       <input
+        aria-label={props.label}
+        autoComplete='off'
         className='text-input'
         type='number'
         min={props.min}
@@ -721,15 +759,24 @@ function NumberField(props: {
         value={props.value}
         onChange={(event) => props.onChange(Number(event.target.value))}
       />
+    </label>
+  )
+}
+
+function OverviewStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className='min-w-[7rem] rounded-2xl border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-sm'>
+      <div className='text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyan-50/70'>{label}</div>
+      <div className='mt-1 text-lg font-semibold text-white'>{value}</div>
     </div>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className='rounded-2xl border border-slate-200 bg-slate-50 p-4'>
+    <div className='rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5'>
       <div className='text-xs font-semibold uppercase tracking-[0.18em] text-slate-400'>{label}</div>
-      <div className='mt-2 break-all text-sm text-slate-700'>{value}</div>
+      <div className='mt-1.5 break-all text-sm text-slate-700'>{value}</div>
     </div>
   )
 }
@@ -745,25 +792,25 @@ function ProcessRuleListItem(props: {
     <button
       className={
         props.selected
-          ? 'relative w-full overflow-hidden rounded-[1.5rem] border border-blue-300 bg-white p-4 text-left shadow-sm ring-2 ring-blue-100 transition'
-          : 'relative w-full overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:bg-slate-50'
+          ? 'relative w-full overflow-hidden rounded-[1.25rem] border border-blue-200 bg-white px-3.5 py-3 text-left shadow-sm ring-1 ring-blue-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300'
+          : 'relative w-full overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200'
       }
       onClick={props.onClick}
       type='button'
     >
       <div className={props.selected ? 'absolute inset-y-0 left-0 w-1 bg-blue-500' : 'absolute inset-y-0 left-0 w-1 bg-transparent'} />
       <div className='pl-2'>
-        <div className='text-sm font-semibold text-slate-900'>{props.title}</div>
-        <div className='mt-1 text-xs text-slate-500'>{props.subtitle}</div>
+        <div className='text-sm font-semibold leading-5 text-slate-900'>{props.title}</div>
+        <div className='mt-0.5 text-xs text-slate-500'>{props.subtitle}</div>
         {props.processNames.length > 0 && (
-          <div className='mt-3 flex flex-wrap gap-2'>
+          <div className='mt-2 flex flex-wrap gap-1.5'>
             {props.processNames.map((processName) => (
               <span
                 key={processName}
                 className={
                   props.selected
-                    ? 'rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700'
-                    : 'rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600'
+                    ? 'rounded-full bg-blue-50 px-2 py-1 text-[0.7rem] font-medium text-blue-700'
+                    : 'rounded-full bg-slate-100 px-2 py-1 text-[0.7rem] font-medium text-slate-600'
                 }
               >
                 {processName}
@@ -785,11 +832,12 @@ function BindingEditor(props: {
   const actionType = props.binding.action.type
 
   return (
-    <div className='rounded-[1.5rem] border border-slate-200 bg-white p-4'>
-      <div className='grid gap-4 lg:grid-cols-[1fr_1fr_1.2fr_auto]'>
+    <div className='rounded-[1.25rem] border border-slate-200 bg-white p-3.5'>
+      <div className='grid gap-3 xl:grid-cols-[11rem_10rem_minmax(0,1fr)_5.5rem]'>
         <div>
           <label className='field-label'>{props.text.gesture}</label>
           <GestureComposer
+            label={props.text.gesture}
             value={props.binding.gesture}
             text={props.text}
             onChange={(gesture) => props.onChange({ ...props.binding, gesture })}
@@ -799,6 +847,7 @@ function BindingEditor(props: {
         <div>
           <label className='field-label'>{props.text.actionType}</label>
           <select
+            aria-label={props.text.actionType}
             className='text-input'
             value={actionType}
             onChange={(event) =>
@@ -835,6 +884,8 @@ function BindingEditor(props: {
             <>
               <label className='field-label'>{props.text.command}</label>
               <input
+                aria-label={props.text.command}
+                autoComplete='off'
                 className='text-input'
                 value={props.binding.action.command}
                 onChange={(event) =>
@@ -848,14 +899,14 @@ function BindingEditor(props: {
           )}
 
           {actionType === 'none' && (
-            <div className='rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500'>
+            <div className='rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500'>
               {props.text.none}
             </div>
           )}
         </div>
 
-        <div className='flex items-end'>
-          <button className='btn-danger w-full' onClick={props.onDelete}>
+        <div className='flex items-end xl:items-start'>
+          <button className='btn-danger w-full xl:mt-6' onClick={props.onDelete} type='button'>
             {props.text.delete}
           </button>
         </div>
@@ -865,23 +916,26 @@ function BindingEditor(props: {
 }
 
 function GestureComposer(props: {
+  label: string
   value: string
   text: I18nText
   onChange: (value: string) => void
 }) {
   return (
-    <div className='space-y-3'>
+    <div className='space-y-2'>
       <input
+        aria-label={props.label}
+        autoComplete='off'
         className='text-input'
         value={props.value}
         onChange={(event) => props.onChange(normalizeGesture(event.target.value))}
         placeholder='UDLR'
       />
-      <div className='flex flex-wrap gap-2'>
+      <div className='flex flex-wrap gap-1.5'>
         {DIRECTION_BUTTONS.map((direction) => (
           <button
             key={direction}
-            className='btn-secondary min-w-12'
+            className='btn-secondary min-w-10'
             onClick={() => props.onChange(normalizeGesture(props.value + direction))}
             type='button'
           >
@@ -910,8 +964,9 @@ function HotkeyRecorder(props: {
       : HOTKEY_KEY_OPTIONS
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-2'>
       <input
+        aria-label={props.text.hotkey}
         className='text-input'
         readOnly
         value={formatHotkey(props.hotkey)}
@@ -925,11 +980,11 @@ function HotkeyRecorder(props: {
         }}
       />
 
-      <div className='rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500'>
+      <div className='rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500'>
         {props.text.hotkeyManualHint}
       </div>
 
-      <div className='flex flex-wrap gap-2'>
+      <div className='flex flex-wrap gap-1.5'>
         {HOTKEY_MODIFIER_ORDER.map((modifier) => {
           const active = props.hotkey.modifiers.includes(modifier)
 
@@ -938,7 +993,7 @@ function HotkeyRecorder(props: {
               key={modifier}
               className={
                 active
-                  ? 'inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100'
+                  ? 'inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200'
                   : 'btn-secondary'
               }
               onClick={() => props.onChange(toggleHotkeyModifier(props.hotkey, modifier))}
@@ -952,6 +1007,7 @@ function HotkeyRecorder(props: {
 
       <div className='flex flex-col gap-2 sm:flex-row'>
         <select
+          aria-label={props.text.selectKey}
           className='text-input'
           value={props.hotkey.key}
           onChange={(event) => props.onChange(normalizeHotkey({ ...props.hotkey, key: event.target.value }))}
