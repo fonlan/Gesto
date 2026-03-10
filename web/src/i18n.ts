@@ -40,6 +40,8 @@ export interface I18nText {
   none: string
   shell: string
   hotkeyHint: string
+  hotkeyManualHint: string
+  selectKey: string
   directionHint: string
 }
 
@@ -84,6 +86,8 @@ export const messages: Record<Locale, I18nText> = {
     none: '无动作',
     shell: '命令执行',
     hotkeyHint: '点击输入框后直接按下快捷键组合',
+    hotkeyManualHint: '部分浏览器快捷键（如 Ctrl+W、Ctrl+L）会被浏览器优先处理；这类组合请用下方按钮和按键列表手动设置。',
+    selectKey: '选择按键',
     directionHint: '支持 U / D / L / R 任意组合，例如 DR、ULR'
   },
   'en-US': {
@@ -126,6 +130,8 @@ export const messages: Record<Locale, I18nText> = {
     none: 'No Action',
     shell: 'Shell Command',
     hotkeyHint: 'Focus the field and press the shortcut combination directly',
+    hotkeyManualHint: 'Some browser shortcuts, such as Ctrl+W and Ctrl+L, are handled by the browser first; use the modifier buttons and key list below for those combinations.',
+    selectKey: 'Select a key',
     directionHint: 'Supports any U / D / L / R combination, such as DR or ULR'
   }
 }

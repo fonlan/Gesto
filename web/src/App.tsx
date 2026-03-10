@@ -12,6 +12,26 @@ import type {
 } from './types'
 
 const DIRECTION_BUTTONS = ['U', 'D', 'L', 'R'] as const
+const HOTKEY_MODIFIER_ORDER = ['Ctrl', 'Alt', 'Shift', 'Meta'] as const
+const HOTKEY_KEY_OPTIONS = [
+  ...Array.from({ length: 26 }, (_, index) => `Key${String.fromCharCode(65 + index)}`),
+  ...Array.from({ length: 10 }, (_, index) => `Digit${index}`),
+  ...Array.from({ length: 24 }, (_, index) => `F${index + 1}`),
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Enter',
+  'Tab',
+  'Space',
+  'Backspace',
+  'Delete',
+  'Escape',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown'
+]
 
 const createEmptyBinding = (): GestureBinding => ({
   gesture: '',
@@ -36,12 +56,15 @@ const normalizeGesture = (value: string) =>
     .join('')
 
 const formatHotkey = (hotkey?: HotkeySpec) => {
-  if (!hotkey || !hotkey.key) {
+  if (!hotkey) {
     return ''
   }
 
-  const parts = [...hotkey.modifiers]
-  parts.push(formatKeyName(hotkey.key))
+  const normalizedHotkey = normalizeHotkey(hotkey)
+  const parts = [...normalizedHotkey.modifiers]
+  if (normalizedHotkey.key) {
+    parts.push(formatKeyName(normalizedHotkey.key))
+  }
   return parts.join(' + ')
 }
 
@@ -53,6 +76,22 @@ const formatKeyName = (key: string) => {
     return key.slice(5)
   }
   return key.replace('Arrow', '')
+}
+
+const normalizeHotkey = (hotkey: HotkeySpec): HotkeySpec => ({
+  modifiers: HOTKEY_MODIFIER_ORDER.filter((modifier) => hotkey.modifiers.includes(modifier)),
+  key: hotkey.key
+})
+
+const toggleHotkeyModifier = (
+  hotkey: HotkeySpec,
+  modifier: (typeof HOTKEY_MODIFIER_ORDER)[number]
+): HotkeySpec => {
+  const modifiers = hotkey.modifiers.includes(modifier)
+    ? hotkey.modifiers.filter((item) => item !== modifier)
+    : [...hotkey.modifiers, modifier]
+
+  return normalizeHotkey({ ...hotkey, modifiers })
 }
 
 const normalizeHotkeyFromEvent = (event: KeyboardEvent<HTMLInputElement>): HotkeySpec | null => {
@@ -100,7 +139,7 @@ const normalizeHotkeyFromEvent = (event: KeyboardEvent<HTMLInputElement>): Hotke
     event.metaKey ? 'Meta' : null
   ].filter(Boolean) as string[]
 
-  return { modifiers, key }
+  return normalizeHotkey({ modifiers, key })
 }
 
 const normalizeActionType = (type: GestureAction['type']): GestureAction => {
@@ -607,7 +646,7 @@ function BindingEditor(props: {
               <label className="field-label">{props.text.hotkey}</label>
               <HotkeyRecorder
                 hotkey={props.binding.action.hotkey}
-                placeholder={props.text.hotkeyHint}
+                text={props.text}
                 onChange={(hotkey) =>
                   props.onChange({
                     ...props.binding,
@@ -688,22 +727,73 @@ function GestureComposer(props: {
 
 function HotkeyRecorder(props: {
   hotkey: HotkeySpec
-  placeholder: string
+  text: (typeof messages)['zh-CN']
   onChange: (value: HotkeySpec) => void
 }) {
+  const keyOptions =
+    props.hotkey.key && !HOTKEY_KEY_OPTIONS.includes(props.hotkey.key)
+      ? [props.hotkey.key, ...HOTKEY_KEY_OPTIONS]
+      : HOTKEY_KEY_OPTIONS
+
   return (
-    <input
-      className="text-input"
-      readOnly
-      value={formatHotkey(props.hotkey)}
-      placeholder={props.placeholder}
-      onKeyDown={(event) => {
-        event.preventDefault()
-        const nextHotkey = normalizeHotkeyFromEvent(event)
-        if (nextHotkey) {
-          props.onChange(nextHotkey)
-        }
-      }}
-    />
+    <div className="space-y-3">
+      <input
+        className="text-input"
+        readOnly
+        value={formatHotkey(props.hotkey)}
+        placeholder={props.text.hotkeyHint}
+        onKeyDown={(event) => {
+          event.preventDefault()
+          const nextHotkey = normalizeHotkeyFromEvent(event)
+          if (nextHotkey) {
+            props.onChange(nextHotkey)
+          }
+        }}
+      />
+
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+        {props.text.hotkeyManualHint}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {HOTKEY_MODIFIER_ORDER.map((modifier) => {
+          const active = props.hotkey.modifiers.includes(modifier)
+
+          return (
+            <button
+              key={modifier}
+              className={
+                active
+                  ? 'inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100'
+                  : 'btn-secondary'
+              }
+              onClick={() => props.onChange(toggleHotkeyModifier(props.hotkey, modifier))}
+              type="button"
+            >
+              {modifier}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <select
+          className="text-input"
+          value={props.hotkey.key}
+          onChange={(event) => props.onChange(normalizeHotkey({ ...props.hotkey, key: event.target.value }))}
+        >
+          <option value="">{props.text.selectKey}</option>
+          {keyOptions.map((key) => (
+            <option key={key} value={key}>
+              {formatKeyName(key)}
+            </option>
+          ))}
+        </select>
+
+        <button className="btn-secondary shrink-0" onClick={() => props.onChange({ modifiers: [], key: '' })} type="button">
+          {props.text.clear}
+        </button>
+      </div>
+    </div>
   )
 }
