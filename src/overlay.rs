@@ -29,6 +29,7 @@ use windows::{
 
 use crate::{
     config::GeneralSettings,
+    logging,
     win::{MonitorBounds, ensure_current_thread_per_monitor_dpi_awareness, to_wide},
 };
 
@@ -92,7 +93,7 @@ impl OverlayController {
             .name("gesto-overlay".to_string())
             .spawn(move || {
                 if let Err(error) = run_overlay_thread(rx) {
-                    eprintln!("[Gesto] overlay thread error: {error:#}");
+                    logging::error(format!("overlay thread error: {error:#}"));
                 }
             })
             .context("failed to spawn overlay thread")?;

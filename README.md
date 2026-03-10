@@ -5,6 +5,7 @@ Gesto 是一个仅面向 Windows 的鼠标手势软件：
 - Rust 后台负责全局鼠标手势、透明轨迹覆盖层、系统托盘、本地 HTTP 服务与配置持久化
 - React + Tailwind 配置页通过默认浏览器打开，无传统桌面配置窗口
 - 配置存储在 `%AppData%/Gesto/config.json`
+- 运行日志写入 `%AppData%/Gesto/logs/YYYY-MM-DD.log`
 - Web 资源可构建后嵌入可执行文件，便于单文件分发
 
 ## 功能概览

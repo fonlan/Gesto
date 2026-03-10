@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 
 use crate::{
     config::{AppConfig, ConfigStore, GestureAction},
+    logging,
     overlay::{OverlayController, TrailStyle},
 };
 
@@ -52,6 +53,7 @@ impl AppContext {
             .apply_autostart(updated.general.autostart)
             .context("failed to update autostart registry value")?;
         *self.config.write() = updated.clone();
+        logging::info("configuration saved");
         Ok(updated)
     }
 

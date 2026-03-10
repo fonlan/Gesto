@@ -13,7 +13,7 @@ use mime_guess::from_path;
 use serde::Serialize;
 use tokio::net::TcpListener;
 
-use crate::{app::AppContext, config::AppConfig};
+use crate::{app::AppContext, config::AppConfig, logging};
 
 static WEB_DIST: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/web/dist");
 
@@ -29,7 +29,7 @@ pub async fn spawn(context: Arc<AppContext>) -> anyhow::Result<u16> {
     let app = router(context);
     tokio::spawn(async move {
         if let Err(error) = axum::serve(listener, app).await {
-            eprintln!("[Gesto] web server error: {error:#}");
+            logging::error(format!("web server error: {error:#}"));
         }
     });
 
@@ -125,6 +125,7 @@ fn localized_message(
 }
 
 fn internal_error(locale: &str, error: anyhow::Error) -> (StatusCode, String) {
+    logging::error(format!("http api error: {error:#}"));
     let prefix = match locale {
         "en-US" => "Internal error",
         _ => "内部错误",

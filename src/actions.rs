@@ -7,7 +7,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 
-use crate::config::{GestureAction, HotkeySpec};
+use crate::{
+    config::{GestureAction, HotkeySpec},
+    logging,
+};
 
 pub fn execute(action: &GestureAction) -> anyhow::Result<()> {
     match action {
@@ -17,9 +20,18 @@ pub fn execute(action: &GestureAction) -> anyhow::Result<()> {
                 .args(["/C", command])
                 .spawn()
                 .with_context(|| format!("failed to spawn shell command: {}", command))?;
+            logging::info(format!("spawned shell action: {}", command));
             Ok(())
         }
-        GestureAction::Hotkey { hotkey } => send_hotkey(hotkey),
+        GestureAction::Hotkey { hotkey } => {
+            send_hotkey(hotkey)?;
+            logging::info(format!(
+                "sent hotkey action: {}+{}",
+                hotkey.modifiers.join("+"),
+                hotkey.key
+            ));
+            Ok(())
+        }
     }
 }
 

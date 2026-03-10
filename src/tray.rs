@@ -25,7 +25,7 @@ use windows::{
     core::PCWSTR,
 };
 
-use crate::{app::AppContext, win::to_wide};
+use crate::{app::AppContext, logging, win::to_wide};
 
 const WM_TRAYICON: u32 = WM_APP + 1;
 const ID_TOGGLE_GESTURES: usize = 1001;
@@ -209,14 +209,18 @@ fn toggle_gestures_enabled() {
     if let Some(context) = CONTEXT.get() {
         let next_enabled = !context.gestures_enabled();
         if let Err(error) = context.set_gestures_enabled(next_enabled) {
-            eprintln!("[Gesto] failed to update gesture toggle: {error:#}");
+            logging::error(format!("failed to update gesture toggle: {error:#}"));
+        } else {
+            logging::info(format!("gesture toggle changed: enabled={}", next_enabled));
         }
     }
 }
 
 fn open_config_page() {
     if let Some(context) = CONTEXT.get() {
-        let _ = webbrowser::open(&context.server_url());
+        if let Err(error) = webbrowser::open(&context.server_url()) {
+            logging::error(format!("failed to open config page: {error:#}"));
+        }
     }
 }
 

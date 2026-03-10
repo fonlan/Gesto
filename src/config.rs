@@ -276,6 +276,10 @@ impl ConfigStore {
         &self.path
     }
 
+    pub fn logs_dir(&self) -> PathBuf {
+        self.dir.join("logs")
+    }
+
     pub fn load_or_create(&self) -> anyhow::Result<AppConfig> {
         fs::create_dir_all(&self.dir).context("failed to create %AppData%/Gesto directory")?;
 
@@ -332,6 +336,7 @@ pub fn normalize_gesture(value: &str) -> String {
 fn normalize_process_names(values: &[String]) -> Vec<String> {
     values
         .iter()
+        .flat_map(|item| item.split([',', ';', '\n', '\r']))
         .map(|item| item.trim().to_ascii_lowercase())
         .filter(|item| !item.is_empty())
         .collect()

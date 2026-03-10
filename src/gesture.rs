@@ -21,9 +21,11 @@ use crate::{
     actions,
     app::AppContext,
     config::normalize_gesture,
+    logging,
     win::{
         MonitorBounds, ensure_current_thread_per_monitor_dpi_awareness,
         foreground_process_on_monitor, monitor_from_point, monitor_scale_factor,
+        process_name_at_point,
     },
 };
 
@@ -37,7 +39,7 @@ pub fn start_global_hook(context: Arc<AppContext>) -> anyhow::Result<()> {
         .name("gesto-mouse-hook".to_string())
         .spawn(move || {
             if let Err(error) = hook_loop() {
-                eprintln!("[Gesto] mouse hook error: {error:#}");
+                logging::error(format!("mouse hook error: {error:#}"));
             }
         })
         .context("failed to spawn mouse hook thread")?;
@@ -111,13 +113,22 @@ impl GestureEngine {
                 let minimum_distance = start_monitor
                     .map(|(monitor, _)| base_minimum_distance * monitor_scale_factor(monitor))
                     .unwrap_or(base_minimum_distance);
+                let point_process_name = process_name_at_point(point);
                 let start_process_name =
                     start_monitor.and_then(|(monitor, _)| foreground_process_on_monitor(monitor));
 
-                if start_process_name
+                if point_process_name
                     .as_deref()
                     .is_some_and(|process_name| self.context.is_process_ignored(process_name))
+                    || start_process_name
+                        .as_deref()
+                        .is_some_and(|process_name| self.context.is_process_ignored(process_name))
                 {
+                    logging::info(format!(
+                        "bypassing gesture interception for ignored process: point={:?}, foreground={:?}",
+                        point_process_name,
+                        start_process_name
+                    ));
                     return false;
                 }
 
@@ -220,9 +231,28 @@ impl GestureEngine {
                                 .context
                                 .resolve_action(&final_state.process_name, &final_state.directions)
                             {
+                                let process_name = final_state.process_name.clone();
+                                let directions = final_state.directions.clone();
+                                logging::info(format!(
+                                    "recognized gesture '{}' for process '{}'",
+                                    directions,
+                                    process_name
+                                ));
                                 thread::spawn(move || {
-                                    let _ = actions::execute(&action);
+                                    if let Err(error) = actions::execute(&action) {
+                                        logging::error(format!(
+                                            "failed to execute gesture '{}' for process '{}': {error:#}",
+                                            directions,
+                                            process_name
+                                        ));
+                                    }
                                 });
+                            } else {
+                                logging::warn(format!(
+                                    "no action resolved for gesture '{}' in process '{}'",
+                                    final_state.directions,
+                                    final_state.process_name
+                                ));
                             }
                         }
 
@@ -230,7 +260,9 @@ impl GestureEngine {
                     }
                     MouseRelease::SyntheticClick => {
                         self.context.overlay().hide();
-                        let _ = send_right_click();
+                        if let Err(error) = send_right_click() {
+                            logging::error(format!("failed to replay right click: {error:#}"));
+                        }
                         true
                     }
                 }

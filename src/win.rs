@@ -16,7 +16,7 @@ use windows::{
                 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor, MDT_EFFECTIVE_DPI,
                 SetProcessDpiAwarenessContext, SetThreadDpiAwarenessContext,
             },
-            WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
+            WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, WindowFromPoint},
         },
     },
     core::PWSTR,
@@ -121,6 +121,17 @@ pub fn foreground_process_on_monitor(monitor: MonitorToken) -> Option<String> {
         if monitor_from_hwnd(hwnd)? != monitor {
             return None;
         }
+        process_name_for_hwnd(hwnd)
+    }
+}
+
+pub fn process_name_at_point(point: POINT) -> Option<String> {
+    unsafe {
+        let hwnd = WindowFromPoint(point);
+        if hwnd.0.is_null() {
+            return None;
+        }
+
         process_name_for_hwnd(hwnd)
     }
 }
