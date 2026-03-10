@@ -33,6 +33,16 @@ impl AppContext {
         self.config.read().locale.clone()
     }
 
+    pub fn gestures_enabled(&self) -> bool {
+        self.config.read().gestures_enabled()
+    }
+
+    pub fn set_gestures_enabled(&self, enabled: bool) -> anyhow::Result<AppConfig> {
+        let mut updated = self.config_snapshot();
+        updated.general.gestures_enabled = enabled;
+        self.save_config(updated)
+    }
+
     pub fn save_config(&self, mut updated: AppConfig) -> anyhow::Result<AppConfig> {
         updated.normalize();
         self.store

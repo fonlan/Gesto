@@ -9,6 +9,7 @@ export interface AppConfig {
 }
 
 export interface GeneralSettings {
+  gesturesEnabled: boolean
   trailColor: string
   trailOpacity: number
   trailWidth: number

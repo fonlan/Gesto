@@ -14,11 +14,11 @@ use windows::{
             WindowsAndMessaging::{
                 AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
                 DestroyMenu, DispatchMessageW, GetCursorPos, GetMessageW, IDI_APPLICATION,
-                LoadIconW, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW, SW_HIDE,
-                SetForegroundWindow, ShowWindow, TPM_LEFTALIGN, TPM_RIGHTBUTTON, TrackPopupMenu,
-                TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_COMMAND,
-                WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP,
-                WNDCLASSW, WS_OVERLAPPEDWINDOW,
+                LoadIconW, MF_CHECKED, MF_STRING, MF_UNCHECKED, MSG, PostMessageW, PostQuitMessage,
+                RegisterClassW, SW_HIDE, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN,
+                TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
+                WM_APP, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONUP,
+                WM_NULL, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -28,8 +28,9 @@ use windows::{
 use crate::{app::AppContext, win::to_wide};
 
 const WM_TRAYICON: u32 = WM_APP + 1;
-const ID_OPEN_CONFIG: usize = 1001;
-const ID_EXIT: usize = 1002;
+const ID_TOGGLE_GESTURES: usize = 1001;
+const ID_OPEN_CONFIG: usize = 1002;
+const ID_EXIT: usize = 1003;
 const APP_ICON_RESOURCE_ID: u16 = 1;
 
 static CONTEXT: OnceCell<Arc<AppContext>> = OnceCell::new();
@@ -141,9 +142,22 @@ unsafe fn show_context_menu(hwnd: HWND) {
         Ok(menu) => menu,
         Err(_) => return,
     };
-    let (open_label, exit_label) = tray_menu_labels();
+    let gestures_enabled = tray_gestures_enabled();
+    let (toggle_label, open_label, exit_label) = tray_menu_labels();
+    let toggle_flags = if gestures_enabled {
+        MF_STRING | MF_CHECKED
+    } else {
+        MF_STRING | MF_UNCHECKED
+    };
+    let toggle_text = to_wide(toggle_label);
     let open_text = to_wide(open_label);
     let exit_text = to_wide(exit_label);
+    let _ = AppendMenuW(
+        menu,
+        toggle_flags,
+        ID_TOGGLE_GESTURES,
+        PCWSTR(toggle_text.as_ptr()),
+    );
     let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_CONFIG, PCWSTR(open_text.as_ptr()));
     let _ = AppendMenuW(menu, MF_STRING, ID_EXIT, PCWSTR(exit_text.as_ptr()));
 
@@ -170,6 +184,13 @@ fn current_locale() -> String {
         .unwrap_or_else(|| "zh-CN".to_string())
 }
 
+fn tray_gestures_enabled() -> bool {
+    CONTEXT
+        .get()
+        .map(|context| context.gestures_enabled())
+        .unwrap_or(true)
+}
+
 fn tray_tooltip_label() -> &'static str {
     match current_locale().as_str() {
         "en-US" => "Gesto - Mouse Gestures",
@@ -177,10 +198,19 @@ fn tray_tooltip_label() -> &'static str {
     }
 }
 
-fn tray_menu_labels() -> (&'static str, &'static str) {
+fn tray_menu_labels() -> (&'static str, &'static str, &'static str) {
     match current_locale().as_str() {
-        "en-US" => ("Open Config", "Exit"),
-        _ => ("打开配置", "退出"),
+        "en-US" => ("Enable Gestures", "Open Config", "Exit"),
+        _ => ("启用鼠标手势", "打开配置", "退出"),
+    }
+}
+
+fn toggle_gestures_enabled() {
+    if let Some(context) = CONTEXT.get() {
+        let next_enabled = !context.gestures_enabled();
+        if let Err(error) = context.set_gestures_enabled(next_enabled) {
+            eprintln!("[Gesto] failed to update gesture toggle: {error:#}");
+        }
     }
 }
 
@@ -199,6 +229,7 @@ unsafe extern "system" fn tray_wnd_proc(
     match msg {
         WM_COMMAND => {
             match (wparam.0 & 0xffff) as usize {
+                ID_TOGGLE_GESTURES => toggle_gestures_enabled(),
                 ID_OPEN_CONFIG => open_config_page(),
                 ID_EXIT => {
                     remove_tray_icon(hwnd);

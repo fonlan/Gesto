@@ -102,6 +102,10 @@ impl GestureEngine {
 
         match message {
             WM_RBUTTONDOWN => {
+                if !self.context.gestures_enabled() {
+                    return false;
+                }
+
                 let start_monitor = monitor_from_point(point);
                 let start_process_name =
                     start_monitor.and_then(|(monitor, _)| foreground_process_on_monitor(monitor));

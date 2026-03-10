@@ -292,7 +292,18 @@ export default function App() {
                 <OverviewStat label={t.gesture} value={totalBindings} />
               </div>
             </div>
-            <div className='flex w-full flex-col gap-3 lg:w-auto lg:min-w-[15rem] lg:max-w-sm'>
+            <div className='flex w-full flex-col gap-3 lg:w-auto lg:min-w-[18rem] lg:max-w-sm'>
+              <HeaderPillSwitch
+                checked={config.general.gesturesEnabled}
+                hint={t.gesturesEnabledHint}
+                label={t.gesturesEnabled}
+                onChange={(checked) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, gesturesEnabled: checked }
+                  }))
+                }
+              />
               <button className='btn-primary w-full' onClick={saveConfig} disabled={saving} type='button'>
                 {saving ? t.saving : t.save}
               </button>
@@ -357,6 +368,7 @@ export default function App() {
                   </span>
                 </div>
                 <input
+                  aria-label={t.autostart}
                   type='checkbox'
                   className='h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500'
                   checked={config.general.autostart}
@@ -742,6 +754,45 @@ function OverviewStat({ label, value }: { label: string; value: number }) {
       <div className='text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyan-50/70'>{label}</div>
       <div className='mt-1 text-lg font-semibold text-white'>{value}</div>
     </div>
+  )
+}
+
+function HeaderPillSwitch(props: {
+  label: string
+  hint: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <button
+      aria-checked={props.checked}
+      aria-label={props.label}
+      className='flex w-full items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-left backdrop-blur-sm transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200'
+      onClick={() => props.onChange(!props.checked)}
+      role='switch'
+      type='button'
+    >
+      <div className='min-w-0'>
+        <div className='text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-cyan-50/70'>{props.label}</div>
+        <div className='mt-1 text-sm leading-5 text-cyan-50/80'>{props.hint}</div>
+      </div>
+      <span
+        aria-hidden='true'
+        className={
+          'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-0.5 transition ' +
+          (props.checked
+            ? 'border-cyan-300/80 bg-cyan-300/90'
+            : 'border-white/15 bg-slate-700/80')
+        }
+      >
+        <span
+          className={
+            'h-5 w-5 rounded-full bg-white shadow-sm transition-transform ' +
+            (props.checked ? 'translate-x-5' : 'translate-x-0')
+          }
+        />
+      </span>
+    </button>
   )
 }
 

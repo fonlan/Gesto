@@ -13,6 +13,8 @@ export interface I18nText {
   noConfigLoaded: string
   globalSettings: string
   language: string
+  gesturesEnabled: string
+  gesturesEnabledHint: string
   trailColor: string
   trailOpacity: string
   trailWidth: string
@@ -65,6 +67,8 @@ export const messages: Record<Locale, I18nText> = {
     noConfigLoaded: '未加载到配置',
     globalSettings: '全局设置',
     language: '语言',
+    gesturesEnabled: '启用鼠标手势',
+    gesturesEnabledHint: '关闭后将完全放行原生右键，不绘制轨迹也不触发手势动作。',
     trailColor: '轨迹颜色',
     trailOpacity: '轨迹不透明度（%）',
     trailWidth: '轨迹宽度',
@@ -115,6 +119,8 @@ export const messages: Record<Locale, I18nText> = {
     noConfigLoaded: 'No config loaded',
     globalSettings: 'Global Settings',
     language: 'Language',
+    gesturesEnabled: 'Enable Mouse Gestures',
+    gesturesEnabledHint: 'When turned off, Gesto passes native right-click events through without drawing trails or triggering gesture actions.',
     trailColor: 'Trail Color',
     trailOpacity: 'Trail Opacity (%)',
     trailWidth: 'Trail Width',

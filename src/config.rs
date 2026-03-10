@@ -26,6 +26,8 @@ pub struct AppConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneralSettings {
+    #[serde(default = "default_gestures_enabled")]
+    pub gestures_enabled: bool,
     #[serde(default = "default_trail_color")]
     pub trail_color: String,
     #[serde(default = "default_trail_opacity")]
@@ -134,6 +136,7 @@ impl Default for AppConfig {
 impl Default for GeneralSettings {
     fn default() -> Self {
         Self {
+            gestures_enabled: default_gestures_enabled(),
             trail_color: default_trail_color(),
             trail_opacity: default_trail_opacity(),
             trail_width: default_trail_width(),
@@ -160,6 +163,10 @@ impl GestureBinding {
 }
 
 impl AppConfig {
+    pub fn gestures_enabled(&self) -> bool {
+        self.general.gestures_enabled
+    }
+
     pub fn normalize(&mut self) {
         self.locale = match self.locale.as_str() {
             "en-US" => "en-US".to_string(),
@@ -200,7 +207,7 @@ impl AppConfig {
     }
 
     pub fn resolve_action(&self, process_name: &str, gesture: &str) -> Option<GestureAction> {
-        if self.is_process_ignored(process_name) {
+        if !self.gestures_enabled() || self.is_process_ignored(process_name) {
             return None;
         }
 
@@ -322,6 +329,10 @@ fn default_locale() -> String {
 
 fn default_trail_color() -> String {
     "#3b82f6".to_string()
+}
+
+fn default_gestures_enabled() -> bool {
+    true
 }
 
 fn default_trail_opacity() -> f32 {
