@@ -17,9 +17,9 @@ pub struct AppConfig {
     pub locale: String,
     #[serde(default)]
     pub general: GeneralSettings,
-    #[serde(default)]
+    #[serde(default = "default_default_actions")]
     pub default_actions: Vec<GestureBinding>,
-    #[serde(default)]
+    #[serde(default = "default_app_rules")]
     pub app_rules: Vec<ApplicationRule>,
 }
 
@@ -38,9 +38,9 @@ pub struct GeneralSettings {
     pub minimum_distance: f32,
     #[serde(default = "default_fade_duration")]
     pub fade_duration_ms: u64,
-    #[serde(default)]
+    #[serde(default = "default_ignored_process_names")]
     pub ignored_process_names: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_autostart")]
     pub autostart: bool,
 }
 
@@ -92,67 +92,8 @@ impl Default for AppConfig {
             version: default_version(),
             locale: default_locale(),
             general: GeneralSettings::default(),
-            default_actions: vec![GestureBinding {
-                gesture: "DR".to_string(),
-                description: "切换到上一个窗口".to_string(),
-                action: GestureAction::Hotkey {
-                    hotkey: HotkeySpec {
-                        modifiers: vec!["Alt".to_string()],
-                        key: "Tab".to_string(),
-                    },
-                },
-            }],
-            app_rules: vec![
-                ApplicationRule {
-                    id: "chrome".to_string(),
-                    name: "Chrome / Edge".to_string(),
-                    process_names: vec!["chrome.exe".to_string(), "msedge.exe".to_string()],
-                    gestures: vec![
-                        GestureBinding {
-                            description: "返回上一页".to_string(),
-                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowLeft")
-                        },
-                        GestureBinding {
-                            description: "前进到下一页".to_string(),
-                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
-                        },
-                        GestureBinding {
-                            description: "关闭当前标签页".to_string(),
-                            ..GestureBinding::hotkey("D", &["Ctrl"], "KeyW")
-                        },
-                    ],
-                },
-                ApplicationRule {
-                    id: "explorer".to_string(),
-                    name: "Explorer".to_string(),
-                    process_names: vec!["explorer.exe".to_string()],
-                    gestures: vec![
-                        GestureBinding {
-                            description: "返回上一级目录".to_string(),
-                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowUp")
-                        },
-                        GestureBinding {
-                            description: "前进到下一个位置".to_string(),
-                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
-                        },
-                    ],
-                },
-                ApplicationRule {
-                    id: "vscode".to_string(),
-                    name: "Visual Studio Code".to_string(),
-                    process_names: vec!["code.exe".to_string()],
-                    gestures: vec![
-                        GestureBinding {
-                            description: "回到上一个编辑位置".to_string(),
-                            ..GestureBinding::hotkey("L", &["Alt"], "ArrowLeft")
-                        },
-                        GestureBinding {
-                            description: "前进到下一个编辑位置".to_string(),
-                            ..GestureBinding::hotkey("R", &["Alt"], "ArrowRight")
-                        },
-                    ],
-                },
-            ],
+            default_actions: default_default_actions(),
+            app_rules: default_app_rules(),
         }
     }
 }
@@ -166,8 +107,8 @@ impl Default for GeneralSettings {
             trail_width: default_trail_width(),
             minimum_distance: default_minimum_distance(),
             fade_duration_ms: default_fade_duration(),
-            ignored_process_names: Vec::new(),
-            autostart: false,
+            ignored_process_names: default_ignored_process_names(),
+            autostart: default_autostart(),
         }
     }
 }
@@ -368,7 +309,7 @@ fn default_gestures_enabled() -> bool {
 }
 
 fn default_trail_opacity() -> f32 {
-    70.0
+    50.0
 }
 
 fn default_trail_width() -> f32 {
@@ -381,4 +322,71 @@ fn default_minimum_distance() -> f32 {
 
 fn default_fade_duration() -> u64 {
     220
+}
+
+fn default_ignored_process_names() -> Vec<String> {
+    vec!["rutar.exe".to_string(), "mstsc.exe".to_string()]
+}
+
+fn default_autostart() -> bool {
+    true
+}
+
+fn default_default_actions() -> Vec<GestureBinding> {
+    Vec::new()
+}
+
+fn default_app_rules() -> Vec<ApplicationRule> {
+    vec![
+        ApplicationRule {
+            id: "chrome".to_string(),
+            name: "Chrome / Edge".to_string(),
+            process_names: vec!["chrome.exe".to_string(), "msedge.exe".to_string()],
+            gestures: vec![
+                default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),
+                default_hotkey_binding("R", "前进", &["Alt"], "ArrowRight"),
+                default_hotkey_binding("D", "滚动到底", &[], "End"),
+                default_hotkey_binding("DR", "关闭当前页", &["Ctrl"], "KeyW"),
+                default_hotkey_binding("U", "滚动到顶", &[], "Home"),
+                default_hotkey_binding("UD", "刷新", &[], "F5"),
+                default_hotkey_binding("DU", "强制刷新", &["Ctrl"], "F5"),
+            ],
+        },
+        ApplicationRule {
+            id: "explorer".to_string(),
+            name: "Explorer".to_string(),
+            process_names: vec!["explorer.exe".to_string()],
+            gestures: vec![
+                default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),
+                default_hotkey_binding("R", "前进", &["Alt"], "ArrowRight"),
+                default_hotkey_binding("U", "滚动到顶部", &[], "Home"),
+                default_hotkey_binding("D", "滚动到底部", &[], "End"),
+                default_hotkey_binding("DR", "关闭当前页", &["Ctrl"], "KeyW"),
+            ],
+        },
+        ApplicationRule {
+            id: "vscode".to_string(),
+            name: "Visual Studio Code".to_string(),
+            process_names: vec!["code.exe".to_string()],
+            gestures: vec![
+                default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),
+                default_hotkey_binding("R", "前进", &["Alt"], "ArrowRight"),
+                default_hotkey_binding("DR", "关闭当前页", &["Ctrl"], "KeyW"),
+                default_hotkey_binding("U", "滚动到顶", &["Ctrl"], "Home"),
+                default_hotkey_binding("D", "滚动到底", &["Ctrl"], "End"),
+            ],
+        },
+    ]
+}
+
+fn default_hotkey_binding(
+    gesture: &str,
+    description: &str,
+    modifiers: &[&str],
+    key: &str,
+) -> GestureBinding {
+    GestureBinding {
+        description: description.to_string(),
+        ..GestureBinding::hotkey(gesture, modifiers, key)
+    }
 }
