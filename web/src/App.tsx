@@ -336,7 +336,7 @@ export default function App() {
               <p className='mt-1 text-sm text-slate-500'>{t.directionHint}</p>
             </div>
 
-            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
+            <div className='mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4'>
               <label className='setting-card'>
                 <span className='field-label'>{t.language}</span>
                 <select
@@ -351,67 +351,13 @@ export default function App() {
                 </select>
               </label>
 
-              <label className='setting-card'>
-                <span className='field-label'>{t.trailColor}</span>
-                <input
-                  className='h-11 w-full rounded-xl border border-slate-200 bg-white px-2 py-2'
-                  type='color'
-                  value={config.general.trailColor}
-                  onChange={(event) =>
-                    patchConfig((current) => ({
-                      ...current,
-                      general: { ...current.general, trailColor: event.target.value }
-                    }))
-                  }
-                />
-              </label>
-
-              <label className='setting-card flex cursor-pointer items-center justify-between gap-4'>
-                <div>
-                  <span className='field-label'>{t.autostart}</span>
-                  <span className='text-sm font-medium text-slate-700'>
-                    {config.general.autostart ? '✓' : '—'}
-                  </span>
-                </div>
-                <input
-                  aria-label={t.autostart}
-                  type='checkbox'
-                  className='h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500'
-                  checked={config.general.autostart}
-                  onChange={(event) =>
-                    patchConfig((current) => ({
-                      ...current,
-                      general: { ...current.general, autostart: event.target.checked }
-                    }))
-                  }
-                />
-              </label>
-
-              <SliderNumberField
-                className='lg:col-span-2'
-                label={t.trailOpacity}
-                min={0}
-                max={100}
-                step={1}
-                value={config.general.trailOpacity}
-                onChange={(value) =>
+              <SettingPillSwitch
+                checked={config.general.autostart}
+                label={t.autostart}
+                onChange={(checked) =>
                   patchConfig((current) => ({
                     ...current,
-                    general: { ...current.general, trailOpacity: value }
-                  }))
-                }
-              />
-
-              <NumberField
-                label={t.trailWidth}
-                min={1}
-                max={24}
-                step={0.5}
-                value={config.general.trailWidth}
-                onChange={(value) =>
-                  patchConfig((current) => ({
-                    ...current,
-                    general: { ...current.general, trailWidth: value }
+                    general: { ...current.general, autostart: checked }
                   }))
                 }
               />
@@ -444,8 +390,50 @@ export default function App() {
                 }
               />
 
+              <label className='setting-card'>
+                <span className='field-label'>{t.trailColor}</span>
+                <input
+                  className='h-11 w-full rounded-xl border border-slate-200 bg-white px-2 py-2'
+                  type='color'
+                  value={config.general.trailColor}
+                  onChange={(event) =>
+                    patchConfig((current) => ({
+                      ...current,
+                      general: { ...current.general, trailColor: event.target.value }
+                    }))
+                  }
+                />
+              </label>
 
-              <label className='setting-card lg:col-span-3'>
+              <NumberField
+                label={t.trailWidth}
+                min={1}
+                max={24}
+                step={0.5}
+                value={config.general.trailWidth}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, trailWidth: value }
+                  }))
+                }
+              />
+
+              <SliderNumberField
+                className='lg:col-span-2'
+                label={t.trailOpacity}
+                min={0}
+                max={100}
+                step={1}
+                value={config.general.trailOpacity}
+                onChange={(value) =>
+                  patchConfig((current) => ({
+                    ...current,
+                    general: { ...current.general, trailOpacity: value }
+                  }))
+                }
+              />
+              <label className='setting-card md:col-span-2 lg:col-span-4'>
                 <span className='field-label'>{t.ignoredProcessNames}</span>
                 <textarea
                   className='text-input min-h-20 resize-y'
@@ -868,6 +856,39 @@ function HeaderPillSwitch(props: {
   )
 }
 
+function SettingPillSwitch(props: {
+  label: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <button
+      aria-checked={props.checked}
+      aria-label={props.label}
+      className='setting-card flex items-center justify-between gap-4 text-left transition hover:border-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200'
+      onClick={() => props.onChange(!props.checked)}
+      role='switch'
+      type='button'
+    >
+      <span className='field-label'>{props.label}</span>
+      <span
+        aria-hidden='true'
+        className={
+          'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-0.5 transition ' +
+          (props.checked ? 'border-blue-500 bg-blue-500' : 'border-slate-300 bg-slate-300')
+        }
+      >
+        <span
+          className={
+            'h-5 w-5 rounded-full bg-white shadow-sm transition-transform ' +
+            (props.checked ? 'translate-x-5' : 'translate-x-0')
+          }
+        />
+      </span>
+    </button>
+  )
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className='rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5'>
@@ -1153,4 +1174,3 @@ function HotkeyRecorder(props: {
     </div>
   )
 }
-
