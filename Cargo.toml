@@ -2,6 +2,7 @@
 name = 'gesto'
 version = '0.1.0'
 edition = '2024'
+build = 'build.rs'
 
 [dependencies]
 anyhow = '1'
@@ -42,3 +43,8 @@ opt-level = "z"   # 针对体积进行优化 (如果追求极致性能可改为 
 panic = "abort"   # 移除 Panic 回溯信息，减小体积
 # 注释掉以保留 panic 堆栈信息，便于调试闪退问题
 strip = true # 自动剥离符号表
+
+[build-dependencies]
+ico = '0.4'
+image = { version = '0.25', default-features = false, features = ['png'] }
+winresource = '0.1'

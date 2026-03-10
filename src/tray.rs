@@ -30,6 +30,7 @@ use crate::{app::AppContext, win::to_wide};
 const WM_TRAYICON: u32 = WM_APP + 1;
 const ID_OPEN_CONFIG: usize = 1001;
 const ID_EXIT: usize = 1002;
+const APP_ICON_RESOURCE_ID: u16 = 1;
 
 static CONTEXT: OnceCell<Arc<AppContext>> = OnceCell::new();
 
@@ -91,6 +92,18 @@ unsafe fn remove_tray_icon(hwnd: HWND) {
     }
 }
 
+fn make_int_resource(resource_id: u16) -> PCWSTR {
+    PCWSTR(resource_id as usize as *const u16)
+}
+
+unsafe fn load_tray_icon(
+) -> anyhow::Result<windows::Win32::UI::WindowsAndMessaging::HICON> {
+    let hinstance = HINSTANCE(GetModuleHandleW(None).context("failed to get module handle")?.0);
+    LoadIconW(Some(hinstance), make_int_resource(APP_ICON_RESOURCE_ID))
+        .or_else(|_| LoadIconW(None, IDI_APPLICATION))
+        .context("failed to load tray icon")
+}
+
 unsafe fn tray_icon_data(hwnd: HWND) -> anyhow::Result<NOTIFYICONDATAW> {
     let mut data = NOTIFYICONDATAW::default();
     data.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
@@ -98,7 +111,7 @@ unsafe fn tray_icon_data(hwnd: HWND) -> anyhow::Result<NOTIFYICONDATAW> {
     data.uID = 1;
     data.uFlags = NIF_MESSAGE | NIF_TIP | NIF_ICON;
     data.uCallbackMessage = WM_TRAYICON;
-    data.hIcon = LoadIconW(None, IDI_APPLICATION).context("failed to load tray icon")?;
+    data.hIcon = load_tray_icon()?;
 
     let tip = to_wide("Gesto");
     for (index, ch) in tip
