@@ -25,11 +25,16 @@ export interface I18nText {
   configPath: string
   defaultRules: string
   appRules: string
+  processRulesHint: string
   addRule: string
   addBinding: string
   ruleName: string
   processNames: string
   processHint: string
+  globalProcessName: string
+  globalProcessHint: string
+  emptyProcessNames: string
+  unnamedRule: string
   gesture: string
   actionType: string
   hotkey: string
@@ -71,11 +76,16 @@ export const messages: Record<Locale, I18nText> = {
     configPath: '配置文件',
     defaultRules: '全局默认手势',
     appRules: '按程序定制',
+    processRulesHint: '左侧选择进程，右侧编辑该进程对应的手势规则；未命中特定程序时会回退到全局规则。',
     addRule: '新增程序规则',
     addBinding: '新增手势',
     ruleName: '规则名称',
     processNames: '进程名',
     processHint: '多个进程名请用逗号分隔，例如 chrome.exe, msedge.exe',
+    globalProcessName: '全局规则',
+    globalProcessHint: '当没有命中专属程序规则时，将应用这里的默认手势。',
+    emptyProcessNames: '暂未设置进程名',
+    unnamedRule: '未命名规则',
     gesture: '手势',
     actionType: '动作类型',
     hotkey: '快捷键',
@@ -115,11 +125,16 @@ export const messages: Record<Locale, I18nText> = {
     configPath: 'Config File',
     defaultRules: 'Default Gestures',
     appRules: 'Per-App Rules',
+    processRulesHint: 'Select a process on the left and edit its gesture rules on the right; unmatched apps fall back to the global rule.',
     addRule: 'Add App Rule',
     addBinding: 'Add Gesture',
     ruleName: 'Rule Name',
     processNames: 'Process Names',
     processHint: 'Separate multiple process names with commas, e.g. chrome.exe, msedge.exe',
+    globalProcessName: 'Global Rule',
+    globalProcessHint: 'These default gestures apply when no app-specific rule matches.',
+    emptyProcessNames: 'No process names yet',
+    unnamedRule: 'Unnamed Rule',
     gesture: 'Gesture',
     actionType: 'Action Type',
     hotkey: 'Shortcut',
