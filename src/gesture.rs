@@ -23,7 +23,7 @@ use crate::{
     config::normalize_gesture,
     win::{
         MonitorBounds, ensure_current_thread_per_monitor_dpi_awareness,
-        foreground_process_on_monitor, monitor_from_point,
+        foreground_process_on_monitor, monitor_from_point, monitor_scale_factor,
     },
 };
 
@@ -75,6 +75,7 @@ struct GestureEngine {
 struct GestureState {
     right_button_down: bool,
     gesture_mode: bool,
+    minimum_distance: f32,
     start_monitor_bounds: Option<MonitorBounds>,
     start_process_name: Option<String>,
     start_point: Option<windows::Win32::Foundation::POINT>,
@@ -98,7 +99,6 @@ impl GestureEngine {
         }
 
         let point = data.pt;
-        let minimum_distance = self.context.minimum_distance();
 
         match message {
             WM_RBUTTONDOWN => {
@@ -106,7 +106,11 @@ impl GestureEngine {
                     return false;
                 }
 
+                let base_minimum_distance = self.context.minimum_distance();
                 let start_monitor = monitor_from_point(point);
+                let minimum_distance = start_monitor
+                    .map(|(monitor, _)| base_minimum_distance * monitor_scale_factor(monitor))
+                    .unwrap_or(base_minimum_distance);
                 let start_process_name =
                     start_monitor.and_then(|(monitor, _)| foreground_process_on_monitor(monitor));
 
@@ -121,6 +125,7 @@ impl GestureEngine {
                     let mut state = self.state.lock();
                     state.right_button_down = true;
                     state.gesture_mode = false;
+                    state.minimum_distance = minimum_distance;
                     state.start_point = Some(point);
                     state.last_point = Some(point);
                     state.direction_anchor = Some(point);
@@ -147,6 +152,7 @@ impl GestureEngine {
                     Some(value) => value,
                     None => return false,
                 };
+                let minimum_distance = state.minimum_distance.max(8.0);
 
                 let total_distance = euclidean_distance(start_point, point);
 
@@ -249,6 +255,7 @@ enum MouseRelease {
 fn reset_state(state: &mut GestureState) {
     state.right_button_down = false;
     state.gesture_mode = false;
+    state.minimum_distance = 0.0;
     state.start_monitor_bounds = None;
     state.start_process_name = None;
     state.start_point = None;

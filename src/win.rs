@@ -5,7 +5,7 @@ use windows::{
     Win32::{
         Foundation::{CloseHandle, HWND, POINT, RECT},
         Graphics::Gdi::{
-            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
+            GetMonitorInfoW, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
             MonitorFromWindow,
         },
         System::Threading::{
@@ -13,8 +13,8 @@ use windows::{
         },
         UI::{
             HiDpi::{
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
-                SetThreadDpiAwarenessContext,
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForMonitor, MDT_EFFECTIVE_DPI,
+                SetProcessDpiAwarenessContext, SetThreadDpiAwarenessContext,
             },
             WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
         },
@@ -71,6 +71,13 @@ pub fn ensure_current_thread_per_monitor_dpi_awareness() {
     unsafe {
         let _ = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
+}
+
+pub fn monitor_scale_factor(monitor: MonitorToken) -> f32 {
+    monitor_effective_dpi(monitor)
+        .map(|dpi| dpi as f32 / 96.0)
+        .filter(|scale| *scale > 0.0)
+        .unwrap_or(1.0)
 }
 
 pub fn monitor_from_point(point: POINT) -> Option<(MonitorToken, MonitorBounds)> {
@@ -148,5 +155,20 @@ pub fn process_name_for_hwnd(hwnd: HWND) -> Option<String> {
         Path::new(&full_path)
             .file_name()
             .map(|name| name.to_string_lossy().to_ascii_lowercase())
+    }
+}
+
+fn monitor_effective_dpi(monitor: MonitorToken) -> Option<u32> {
+    unsafe {
+        let mut dpi_x = 0u32;
+        let mut dpi_y = 0u32;
+        GetDpiForMonitor(
+            HMONITOR(monitor.0 as *mut _),
+            MDT_EFFECTIVE_DPI,
+            &mut dpi_x,
+            &mut dpi_y,
+        )
+        .ok()?;
+        Some(dpi_x.max(dpi_y))
     }
 }
