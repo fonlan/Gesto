@@ -75,6 +75,10 @@ impl AppContext {
         config.resolve_action(process_name, gesture)
     }
 
+    pub fn is_process_ignored(&self, process_name: &str) -> bool {
+        self.config.read().is_process_ignored(process_name)
+    }
+
     pub fn minimum_distance(&self) -> f32 {
         self.config.read().general.minimum_distance.max(8.0)
     }

@@ -15,6 +15,7 @@ export interface GeneralSettings {
   fadeDurationMs: number
   rightClickIdleFallbackMs: number
   rightClickIdleMovementTolerance: number
+  ignoredProcessNames: string[]
   autostart: boolean
 }
 

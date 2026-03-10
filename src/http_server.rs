@@ -129,7 +129,10 @@ fn internal_error(locale: &str, error: anyhow::Error) -> (StatusCode, String) {
         "en-US" => "Internal error",
         _ => "内部错误",
     };
-    (StatusCode::INTERNAL_SERVER_ERROR, format!("{prefix}: {error}"))
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        format!("{prefix}: {error}"),
+    )
 }
 
 #[derive(Serialize)]

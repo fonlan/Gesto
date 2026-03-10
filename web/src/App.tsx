@@ -59,6 +59,12 @@ const normalizeGesture = (value: string) =>
 const formatProcessNames = (processNames: string[], fallback: string) =>
   processNames.length > 0 ? processNames.join(', ') : fallback
 
+const parseProcessNames = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
 const getRuleEditorTitle = (rule: ApplicationRule, text: I18nText) => {
   const trimmedName = rule.name.trim()
   if (trimmedName) {
@@ -393,6 +399,23 @@ export default function App() {
                   }))
                 }
               />
+              <div className='md:col-span-2'>
+                <label className='field-label'>{t.ignoredProcessNames}</label>
+                <textarea
+                  className='text-input min-h-24 resize-y'
+                  value={config.general.ignoredProcessNames.join(', ')}
+                  onChange={(event) =>
+                    patchConfig((current) => ({
+                      ...current,
+                      general: {
+                        ...current.general,
+                        ignoredProcessNames: parseProcessNames(event.target.value)
+                      }
+                    }))
+                  }
+                />
+                <p className='mt-2 text-sm text-slate-500'>{t.ignoredProcessHint}</p>
+              </div>
               <div className='flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3'>
                 <div>
                   <div className='text-sm font-medium text-slate-700'>{t.autostart}</div>
@@ -554,10 +577,7 @@ export default function App() {
                         className='text-input'
                         value={selectedRule.processNames.join(', ')}
                         onChange={(event) => {
-                          const processNames = event.target.value
-                            .split(',')
-                            .map((item) => item.trim())
-                            .filter(Boolean)
+                          const processNames = parseProcessNames(event.target.value)
 
                           patchConfig((current) => ({
                             ...current,

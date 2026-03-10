@@ -39,6 +39,8 @@ pub struct GeneralSettings {
     #[serde(default = "default_right_click_idle_movement_tolerance")]
     pub right_click_idle_movement_tolerance: f32,
     #[serde(default)]
+    pub ignored_process_names: Vec<String>,
+    #[serde(default)]
     pub autostart: bool,
 }
 
@@ -140,6 +142,7 @@ impl Default for GeneralSettings {
             fade_duration_ms: default_fade_duration(),
             right_click_idle_fallback_ms: default_right_click_idle_fallback_ms(),
             right_click_idle_movement_tolerance: default_right_click_idle_movement_tolerance(),
+            ignored_process_names: Vec::new(),
             autostart: false,
         }
     }
@@ -175,18 +178,15 @@ impl AppConfig {
             .right_click_idle_movement_tolerance
             .clamp(0.0, 24.0);
         self.general.trail_color = normalize_color(&self.general.trail_color);
+        self.general.ignored_process_names =
+            normalize_process_names(&self.general.ignored_process_names);
 
         for binding in &mut self.default_actions {
             binding.gesture = normalize_gesture(&binding.gesture);
         }
 
         for rule in &mut self.app_rules {
-            rule.process_names = rule
-                .process_names
-                .iter()
-                .map(|item| item.trim().to_ascii_lowercase())
-                .filter(|item| !item.is_empty())
-                .collect();
+            rule.process_names = normalize_process_names(&rule.process_names);
             for binding in &mut rule.gestures {
                 binding.gesture = normalize_gesture(&binding.gesture);
             }
@@ -197,7 +197,21 @@ impl AppConfig {
         self.app_rules.retain(|rule| !rule.process_names.is_empty());
     }
 
+    pub fn is_process_ignored(&self, process_name: &str) -> bool {
+        let process_name = process_name.trim().to_ascii_lowercase();
+        !process_name.is_empty()
+            && self
+                .general
+                .ignored_process_names
+                .iter()
+                .any(|candidate| candidate == &process_name)
+    }
+
     pub fn resolve_action(&self, process_name: &str, gesture: &str) -> Option<GestureAction> {
+        if self.is_process_ignored(process_name) {
+            return None;
+        }
+
         let process_name = process_name.to_ascii_lowercase();
         let gesture = normalize_gesture(gesture);
 
@@ -286,6 +300,14 @@ pub fn normalize_gesture(value: &str) -> String {
             'U' | 'D' | 'L' | 'R' => Some(ch.to_ascii_uppercase()),
             _ => None,
         })
+        .collect()
+}
+
+fn normalize_process_names(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .map(|item| item.trim().to_ascii_lowercase())
+        .filter(|item| !item.is_empty())
         .collect()
 }
 

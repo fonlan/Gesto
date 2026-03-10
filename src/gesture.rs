@@ -22,7 +22,7 @@ use crate::{
     app::AppContext,
     config::normalize_gesture,
     win::{
-        MonitorBounds, MonitorToken, ensure_current_thread_per_monitor_dpi_awareness,
+        MonitorBounds, ensure_current_thread_per_monitor_dpi_awareness,
         foreground_process_on_monitor, monitor_from_point,
     },
 };
@@ -78,8 +78,8 @@ struct GestureState {
     gesture_mode: bool,
     movement_detected: bool,
     press_serial: u64,
-    start_monitor: Option<MonitorToken>,
     start_monitor_bounds: Option<MonitorBounds>,
+    start_process_name: Option<String>,
     start_point: Option<windows::Win32::Foundation::POINT>,
     last_point: Option<windows::Win32::Foundation::POINT>,
     direction_anchor: Option<windows::Win32::Foundation::POINT>,
@@ -106,6 +106,17 @@ impl GestureEngine {
 
         match message {
             WM_RBUTTONDOWN => {
+                let start_monitor = monitor_from_point(point);
+                let start_process_name =
+                    start_monitor.and_then(|(monitor, _)| foreground_process_on_monitor(monitor));
+
+                if start_process_name
+                    .as_deref()
+                    .is_some_and(|process_name| self.context.is_process_ignored(process_name))
+                {
+                    return false;
+                }
+
                 let press_serial = {
                     let mut state = self.state.lock();
                     state.press_serial = state.press_serial.wrapping_add(1);
@@ -116,14 +127,13 @@ impl GestureEngine {
                     state.start_point = Some(point);
                     state.last_point = Some(point);
                     state.direction_anchor = Some(point);
+                    state.start_process_name = start_process_name;
                     state.points.clear();
                     state.points.push(point);
                     state.directions.clear();
-                    if let Some((monitor, bounds)) = monitor_from_point(point) {
-                        state.start_monitor = Some(monitor);
+                    if let Some((_, bounds)) = start_monitor {
                         state.start_monitor_bounds = Some(bounds);
                     } else {
-                        state.start_monitor = None;
                         state.start_monitor_bounds = None;
                     }
                     state.press_serial
@@ -201,7 +211,7 @@ impl GestureEngine {
 
                         let snapshot = CompletedGesture {
                             gesture_mode: state.gesture_mode,
-                            monitor: state.start_monitor,
+                            process_name: state.start_process_name.clone().unwrap_or_default(),
                             directions: normalize_gesture(&state.directions),
                         };
                         reset_state(&mut state);
@@ -219,13 +229,9 @@ impl GestureEngine {
                     MouseRelease::Gesture(final_state) => {
                         self.context.overlay().finish();
                         if !final_state.directions.is_empty() {
-                            let process_name = final_state
-                                .monitor
-                                .and_then(foreground_process_on_monitor)
-                                .unwrap_or_default();
                             if let Some(action) = self
                                 .context
-                                .resolve_action(&process_name, &final_state.directions)
+                                .resolve_action(&final_state.process_name, &final_state.directions)
                             {
                                 thread::spawn(move || {
                                     let _ = actions::execute(&action);
@@ -287,7 +293,7 @@ impl GestureEngine {
 #[derive(Default)]
 struct CompletedGesture {
     gesture_mode: bool,
-    monitor: Option<MonitorToken>,
+    process_name: String,
     directions: String,
 }
 
@@ -302,8 +308,8 @@ fn reset_state(state: &mut GestureState) {
     state.normal_click_passthrough = false;
     state.gesture_mode = false;
     state.movement_detected = false;
-    state.start_monitor = None;
     state.start_monitor_bounds = None;
+    state.start_process_name = None;
     state.start_point = None;
     state.last_point = None;
     state.direction_anchor = None;
