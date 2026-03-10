@@ -12,7 +12,7 @@ import type {
 } from './types'
 
 const DIRECTION_BUTTONS = ['U', 'D', 'L', 'R'] as const
-const HOTKEY_MODIFIER_ORDER = ['Ctrl', 'Alt', 'Shift', 'Meta'] as const
+const HOTKEY_MODIFIER_ORDER = ['Ctrl', 'Alt', 'Shift', 'Win'] as const
 const HOTKEY_KEY_OPTIONS = [
   ...Array.from({ length: 26 }, (_, index) => 'Key' + String.fromCharCode(65 + index)),
   ...Array.from({ length: 10 }, (_, index) => 'Digit' + index),
@@ -98,8 +98,24 @@ const formatKeyName = (key: string) => {
   return key.replace('Arrow', '')
 }
 
+const normalizeHotkeyModifier = (
+  modifier: string
+): ((typeof HOTKEY_MODIFIER_ORDER)[number]) | null => {
+  switch (modifier) {
+    case 'Ctrl':
+    case 'Alt':
+    case 'Shift':
+    case 'Win':
+      return modifier
+    default:
+      return null
+  }
+}
+
 const normalizeHotkey = (hotkey: HotkeySpec): HotkeySpec => ({
-  modifiers: HOTKEY_MODIFIER_ORDER.filter((modifier) => hotkey.modifiers.includes(modifier)),
+  modifiers: HOTKEY_MODIFIER_ORDER.filter((modifier) =>
+    hotkey.modifiers.map(normalizeHotkeyModifier).includes(modifier)
+  ),
   key: hotkey.key
 })
 
@@ -115,7 +131,7 @@ const toggleHotkeyModifier = (
 }
 
 const normalizeHotkeyFromEvent = (event: KeyboardEvent<HTMLInputElement>): HotkeySpec | null => {
-  const ignored = new Set(['Control', 'Shift', 'Alt', 'Meta'])
+  const ignored = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS'])
   if (ignored.has(event.key)) {
     return null
   }
@@ -156,7 +172,7 @@ const normalizeHotkeyFromEvent = (event: KeyboardEvent<HTMLInputElement>): Hotke
     event.ctrlKey ? 'Ctrl' : null,
     event.altKey ? 'Alt' : null,
     event.shiftKey ? 'Shift' : null,
-    event.metaKey ? 'Meta' : null
+    event.metaKey ? 'Win' : null
   ].filter(Boolean) as string[]
 
   return normalizeHotkey({ modifiers, key })

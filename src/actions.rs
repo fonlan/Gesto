@@ -79,7 +79,7 @@ fn modifier_to_vk(token: &str) -> Option<VIRTUAL_KEY> {
         "Ctrl" => Some(VK_CONTROL),
         "Alt" => Some(VK_MENU),
         "Shift" => Some(VK_SHIFT),
-        "Meta" => Some(VK_LWIN),
+        "Win" => Some(VK_LWIN),
         _ => None,
     }
 }
