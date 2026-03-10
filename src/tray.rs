@@ -13,12 +13,12 @@ use windows::{
             },
             WindowsAndMessaging::{
                 AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
-                DestroyMenu, DispatchMessageW, GetCursorPos, GetMessageW, IDI_APPLICATION,
-                LoadIconW, MF_CHECKED, MF_STRING, MF_UNCHECKED, MSG, PostMessageW, PostQuitMessage,
-                RegisterClassW, SW_HIDE, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN,
-                TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
-                WM_APP, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONUP,
-                WM_NULL, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+                DestroyMenu, DispatchMessageW, FindWindowW, GetCursorPos, GetMessageW,
+                IDI_APPLICATION, LoadIconW, MF_CHECKED, MF_STRING, MF_UNCHECKED, MSG, PostMessageW,
+                PostQuitMessage, RegisterClassW, SW_HIDE, SetForegroundWindow, ShowWindow,
+                TPM_LEFTALIGN, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE,
+                WINDOW_STYLE, WM_APP, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONDBLCLK,
+                WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -27,7 +27,9 @@ use windows::{
 
 use crate::{app::AppContext, logging, win::to_wide};
 
+const TRAY_WINDOW_CLASS: &str = "GestoTrayWindow";
 const WM_TRAYICON: u32 = WM_APP + 1;
+const WM_OPEN_CONFIG: u32 = WM_APP + 2;
 const ID_TOGGLE_GESTURES: usize = 1001;
 const ID_OPEN_CONFIG: usize = 1002;
 const ID_EXIT: usize = 1003;
@@ -39,7 +41,7 @@ pub fn run(context: Arc<AppContext>) -> anyhow::Result<()> {
     let _ = CONTEXT.set(context);
 
     unsafe {
-        let class_name = to_wide("GestoTrayWindow");
+        let class_name = to_wide(TRAY_WINDOW_CLASS);
         let hinstance = GetModuleHandleW(None).context("failed to get module handle")?;
         let wnd_class = WNDCLASSW {
             lpfnWndProc: Some(tray_wnd_proc),
@@ -76,6 +78,18 @@ pub fn run(context: Arc<AppContext>) -> anyhow::Result<()> {
 
         remove_tray_icon(hwnd);
         Ok(())
+    }
+}
+
+pub fn notify_existing_instance_open_config() -> bool {
+    unsafe {
+        let class_name = to_wide(TRAY_WINDOW_CLASS);
+        let hwnd = match FindWindowW(PCWSTR(class_name.as_ptr()), PCWSTR::null()) {
+            Ok(hwnd) => hwnd,
+            Err(_) => return false,
+        };
+
+        PostMessageW(Some(hwnd), WM_OPEN_CONFIG, WPARAM(0), LPARAM(0)).is_ok()
     }
 }
 
@@ -231,6 +245,10 @@ unsafe extern "system" fn tray_wnd_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
+        WM_OPEN_CONFIG => {
+            open_config_page();
+            LRESULT(0)
+        }
         WM_COMMAND => {
             match (wparam.0 & 0xffff) as usize {
                 ID_TOGGLE_GESTURES => toggle_gestures_enabled(),

@@ -11,18 +11,26 @@ mod gesture;
 mod http_server;
 mod logging;
 mod overlay;
+mod single_instance;
 mod tray;
 mod win;
 
 use anyhow::Context;
 use app::AppContext;
 use config::ConfigStore;
+use single_instance::InstanceState;
 use win::enable_per_monitor_dpi_awareness;
 
 fn main() -> anyhow::Result<()> {
     let store = ConfigStore::new().context("failed to prepare config store")?;
     logging::init(store.logs_dir()).context("failed to initialize logger")?;
     logging::install_panic_hook();
+
+    let _single_instance_guard =
+        match single_instance::acquire().context("failed to initialize single-instance guard")? {
+            InstanceState::Primary(guard) => guard,
+            InstanceState::Secondary => return Ok(()),
+        };
 
     if let Err(error) = run(store) {
         logging::error(format!("fatal application error: {error:#}"));
