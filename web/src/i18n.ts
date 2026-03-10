@@ -18,8 +18,6 @@ export interface I18nText {
   trailWidth: string
   minimumDistance: string
   fadeDuration: string
-  rightClickIdleFallback: string
-  rightClickIdleMovementTolerance: string
   ignoredProcessNames: string
   ignoredProcessHint: string
   autostart: string
@@ -72,8 +70,6 @@ export const messages: Record<Locale, I18nText> = {
     trailWidth: '轨迹宽度',
     minimumDistance: '最小触发距离',
     fadeDuration: '渐隐时长（毫秒）',
-    rightClickIdleFallback: '静止右键回退延迟（毫秒，0=关闭）',
-    rightClickIdleMovementTolerance: '静止判定容差（像素）',
     ignoredProcessNames: '忽略进程列表',
     ignoredProcessHint: '多个进程名请用逗号分隔；命中这些进程时将完全禁用鼠标手势并放行原生右键。',
     autostart: '开机自启动',
@@ -124,8 +120,6 @@ export const messages: Record<Locale, I18nText> = {
     trailWidth: 'Trail Width',
     minimumDistance: 'Minimum Trigger Distance',
     fadeDuration: 'Fade Duration (ms)',
-    rightClickIdleFallback: 'Idle Right-Click Fallback (ms, 0 = off)',
-    rightClickIdleMovementTolerance: 'Idle Movement Tolerance (px)',
     ignoredProcessNames: 'Ignored Processes',
     ignoredProcessHint: 'Separate multiple process names with commas; matching processes bypass gesture handling and keep native right-click behavior.',
     autostart: 'Launch on Startup',

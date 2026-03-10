@@ -36,10 +36,6 @@ pub struct GeneralSettings {
     pub minimum_distance: f32,
     #[serde(default = "default_fade_duration")]
     pub fade_duration_ms: u64,
-    #[serde(default = "default_right_click_idle_fallback_ms")]
-    pub right_click_idle_fallback_ms: u64,
-    #[serde(default = "default_right_click_idle_movement_tolerance")]
-    pub right_click_idle_movement_tolerance: f32,
     #[serde(default)]
     pub ignored_process_names: Vec<String>,
     #[serde(default)]
@@ -143,8 +139,6 @@ impl Default for GeneralSettings {
             trail_width: default_trail_width(),
             minimum_distance: default_minimum_distance(),
             fade_duration_ms: default_fade_duration(),
-            right_click_idle_fallback_ms: default_right_click_idle_fallback_ms(),
-            right_click_idle_movement_tolerance: default_right_click_idle_movement_tolerance(),
             ignored_process_names: Vec::new(),
             autostart: false,
         }
@@ -175,12 +169,6 @@ impl AppConfig {
         self.general.trail_width = self.general.trail_width.clamp(1.0, 24.0);
         self.general.minimum_distance = self.general.minimum_distance.clamp(8.0, 120.0);
         self.general.fade_duration_ms = self.general.fade_duration_ms.clamp(60, 2_000);
-        self.general.right_click_idle_fallback_ms =
-            self.general.right_click_idle_fallback_ms.clamp(0, 1_000);
-        self.general.right_click_idle_movement_tolerance = self
-            .general
-            .right_click_idle_movement_tolerance
-            .clamp(0.0, 24.0);
         self.general.trail_color = normalize_color(&self.general.trail_color);
         self.general.ignored_process_names =
             normalize_process_names(&self.general.ignored_process_names);
@@ -350,12 +338,4 @@ fn default_minimum_distance() -> f32 {
 
 fn default_fade_duration() -> u64 {
     220
-}
-
-fn default_right_click_idle_fallback_ms() -> u64 {
-    180
-}
-
-fn default_right_click_idle_movement_tolerance() -> f32 {
-    2.0
 }

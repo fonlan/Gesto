@@ -426,33 +426,6 @@ export default function App() {
                 }
               />
 
-              <NumberField
-                label={t.rightClickIdleFallback}
-                min={0}
-                max={1000}
-                step={10}
-                value={config.general.rightClickIdleFallbackMs}
-                onChange={(value) =>
-                  patchConfig((current) => ({
-                    ...current,
-                    general: { ...current.general, rightClickIdleFallbackMs: value }
-                  }))
-                }
-              />
-
-              <NumberField
-                label={t.rightClickIdleMovementTolerance}
-                min={0}
-                max={24}
-                step={0.5}
-                value={config.general.rightClickIdleMovementTolerance}
-                onChange={(value) =>
-                  patchConfig((current) => ({
-                    ...current,
-                    general: { ...current.general, rightClickIdleMovementTolerance: value }
-                  }))
-                }
-              />
 
               <label className='setting-card lg:col-span-3'>
                 <span className='field-label'>{t.ignoredProcessNames}</span>

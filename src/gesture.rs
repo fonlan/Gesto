@@ -74,10 +74,7 @@ struct GestureEngine {
 #[derive(Default)]
 struct GestureState {
     right_button_down: bool,
-    normal_click_passthrough: bool,
     gesture_mode: bool,
-    movement_detected: bool,
-    press_serial: u64,
     start_monitor_bounds: Option<MonitorBounds>,
     start_process_name: Option<String>,
     start_point: Option<windows::Win32::Foundation::POINT>,
@@ -102,7 +99,6 @@ impl GestureEngine {
 
         let point = data.pt;
         let minimum_distance = self.context.minimum_distance();
-        let idle_movement_tolerance = self.context.right_click_idle_movement_tolerance();
 
         match message {
             WM_RBUTTONDOWN => {
@@ -117,13 +113,10 @@ impl GestureEngine {
                     return false;
                 }
 
-                let press_serial = {
+                {
                     let mut state = self.state.lock();
-                    state.press_serial = state.press_serial.wrapping_add(1);
                     state.right_button_down = true;
-                    state.normal_click_passthrough = false;
                     state.gesture_mode = false;
-                    state.movement_detected = false;
                     state.start_point = Some(point);
                     state.last_point = Some(point);
                     state.direction_anchor = Some(point);
@@ -136,10 +129,8 @@ impl GestureEngine {
                     } else {
                         state.start_monitor_bounds = None;
                     }
-                    state.press_serial
-                };
+                }
 
-                self.schedule_idle_right_click_fallback(press_serial);
                 true
             }
             WM_MOUSEMOVE => {
@@ -154,14 +145,6 @@ impl GestureEngine {
                 };
 
                 let total_distance = euclidean_distance(start_point, point);
-                let moved_enough_for_idle_fallback = if idle_movement_tolerance <= 0.0 {
-                    total_distance > 0.0
-                } else {
-                    total_distance >= idle_movement_tolerance
-                };
-                if moved_enough_for_idle_fallback {
-                    state.movement_detected = true;
-                }
 
                 if !state.gesture_mode {
                     if total_distance < minimum_distance {
@@ -201,31 +184,25 @@ impl GestureEngine {
             WM_RBUTTONUP => {
                 let release = {
                     let mut state = self.state.lock();
-                    if state.normal_click_passthrough {
-                        reset_state(&mut state);
-                        MouseRelease::PassThrough
+                    if !state.right_button_down {
+                        return false;
+                    }
+
+                    let snapshot = CompletedGesture {
+                        gesture_mode: state.gesture_mode,
+                        process_name: state.start_process_name.clone().unwrap_or_default(),
+                        directions: normalize_gesture(&state.directions),
+                    };
+                    reset_state(&mut state);
+
+                    if snapshot.gesture_mode {
+                        MouseRelease::Gesture(snapshot)
                     } else {
-                        if !state.right_button_down {
-                            return false;
-                        }
-
-                        let snapshot = CompletedGesture {
-                            gesture_mode: state.gesture_mode,
-                            process_name: state.start_process_name.clone().unwrap_or_default(),
-                            directions: normalize_gesture(&state.directions),
-                        };
-                        reset_state(&mut state);
-
-                        if snapshot.gesture_mode {
-                            MouseRelease::Gesture(snapshot)
-                        } else {
-                            MouseRelease::SyntheticClick
-                        }
+                        MouseRelease::SyntheticClick
                     }
                 };
 
                 match release {
-                    MouseRelease::PassThrough => false,
                     MouseRelease::Gesture(final_state) => {
                         self.context.overlay().finish();
                         if !final_state.directions.is_empty() {
@@ -251,43 +228,6 @@ impl GestureEngine {
             _ => false,
         }
     }
-
-    fn schedule_idle_right_click_fallback(&self, press_serial: u64) {
-        let Some(delay) = self.context.right_click_idle_fallback_delay() else {
-            return;
-        };
-        let Some(engine) = ENGINE.get().cloned() else {
-            return;
-        };
-
-        thread::spawn(move || {
-            thread::sleep(delay);
-            engine.trigger_idle_right_click_fallback(press_serial);
-        });
-    }
-
-    fn trigger_idle_right_click_fallback(&self, press_serial: u64) {
-        let should_replay_down = {
-            let mut state = self.state.lock();
-            if state.press_serial != press_serial
-                || !state.right_button_down
-                || state.gesture_mode
-                || state.movement_detected
-            {
-                false
-            } else {
-                arm_normal_click_passthrough(&mut state);
-                true
-            }
-        };
-
-        if should_replay_down {
-            self.context.overlay().hide();
-            if let Err(error) = send_right_button_down() {
-                eprintln!("[Gesto] failed to replay right button down: {error:#}");
-            }
-        }
-    }
 }
 
 #[derive(Default)]
@@ -298,16 +238,13 @@ struct CompletedGesture {
 }
 
 enum MouseRelease {
-    PassThrough,
     Gesture(CompletedGesture),
     SyntheticClick,
 }
 
 fn reset_state(state: &mut GestureState) {
     state.right_button_down = false;
-    state.normal_click_passthrough = false;
     state.gesture_mode = false;
-    state.movement_detected = false;
     state.start_monitor_bounds = None;
     state.start_process_name = None;
     state.start_point = None;
@@ -315,11 +252,6 @@ fn reset_state(state: &mut GestureState) {
     state.direction_anchor = None;
     state.points.clear();
     state.directions.clear();
-}
-
-fn arm_normal_click_passthrough(state: &mut GestureState) {
-    reset_state(state);
-    state.normal_click_passthrough = true;
 }
 
 fn dominant_direction(
@@ -351,12 +283,6 @@ fn send_right_click() -> anyhow::Result<()> {
         mouse_input(MOUSEEVENTF_RIGHTDOWN),
         mouse_input(MOUSEEVENTF_RIGHTUP),
     ];
-
-    send_mouse_inputs(&inputs)
-}
-
-fn send_right_button_down() -> anyhow::Result<()> {
-    let inputs = [mouse_input(MOUSEEVENTF_RIGHTDOWN)];
 
     send_mouse_inputs(&inputs)
 }

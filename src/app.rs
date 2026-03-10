@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Context;
 use parking_lot::RwLock;
@@ -81,23 +81,5 @@ impl AppContext {
 
     pub fn minimum_distance(&self) -> f32 {
         self.config.read().general.minimum_distance.max(8.0)
-    }
-
-    pub fn right_click_idle_fallback_delay(&self) -> Option<Duration> {
-        let delay_ms = self
-            .config
-            .read()
-            .general
-            .right_click_idle_fallback_ms
-            .min(1_000);
-        (delay_ms > 0).then_some(Duration::from_millis(delay_ms))
-    }
-
-    pub fn right_click_idle_movement_tolerance(&self) -> f32 {
-        self.config
-            .read()
-            .general
-            .right_click_idle_movement_tolerance
-            .clamp(0.0, 24.0)
     }
 }
