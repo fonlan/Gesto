@@ -3,10 +3,10 @@ use std::{mem::size_of, os::windows::ffi::OsStrExt, path::Path};
 
 use windows::{
     Win32::{
-        Foundation::{CloseHandle, HWND, LPARAM, POINT, RECT, WPARAM},
+        Foundation::{CloseHandle, HWND, POINT, RECT},
         Graphics::Gdi::{
             GetMonitorInfoW, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
-            MonitorFromWindow, ScreenToClient,
+            MonitorFromWindow,
         },
         System::Threading::{
             AttachThreadInput, GetCurrentThreadId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -23,9 +23,8 @@ use windows::{
             },
             WindowsAndMessaging::{
                 BringWindowToTop, GA_ROOT, GetAncestor, GetForegroundWindow,
-                GetWindowThreadProcessId, IsIconic, IsWindow, PostMessageW, SW_RESTORE,
-                SetForegroundWindow, ShowWindow, WM_RBUTTONDOWN, WM_RBUTTONUP,
-                WindowFromPoint,
+                GetWindowThreadProcessId, IsIconic, IsWindow, SW_RESTORE, SetForegroundWindow,
+                ShowWindow, WindowFromPoint,
             },
         },
     },
@@ -154,9 +153,6 @@ pub fn window_at_point(point: POINT) -> Option<WindowToken> {
     unsafe { normalize_window_handle(WindowFromPoint(point)) }
 }
 
-pub fn input_window_at_point(point: POINT) -> Option<WindowToken> {
-    unsafe { raw_window_handle(WindowFromPoint(point)) }
-}
 
 pub fn process_name_at_point(point: POINT) -> Option<String> {
     process_name_for_window(window_at_point(point)?)
@@ -166,14 +162,6 @@ pub fn process_name_for_window(window: WindowToken) -> Option<String> {
     process_name_for_hwnd(window.hwnd())
 }
 
-
-pub fn post_right_button_down(window: WindowToken, point: POINT) -> anyhow::Result<()> {
-    post_right_button_message(window, point, true)
-}
-
-pub fn post_right_button_up(window: WindowToken, point: POINT) -> anyhow::Result<()> {
-    post_right_button_message(window, point, false)
-}
 
 pub fn activate_window(window: WindowToken) -> anyhow::Result<()> {
     unsafe {
@@ -324,50 +312,6 @@ fn keyboard_input(
                 dwExtraInfo: 0,
             },
         },
-    }
-}
-
-fn post_right_button_message(
-    window: WindowToken,
-    point: POINT,
-    is_down: bool,
-) -> anyhow::Result<()> {
-    unsafe {
-        let hwnd = window.hwnd();
-        if hwnd.0.is_null() || !IsWindow(Some(hwnd)).as_bool() {
-            return Err(anyhow!("invalid input window handle"));
-        }
-
-        let mut client_point = point;
-        if !ScreenToClient(hwnd, &mut client_point).as_bool() {
-            return Err(anyhow!(
-                "failed to convert screen point to client coordinates"
-            ));
-        }
-
-        let x = (client_point.x as i16 as u16) as u32;
-        let y = (client_point.y as i16 as u16) as u32;
-        let message = if is_down {
-            WM_RBUTTONDOWN
-        } else {
-            WM_RBUTTONUP
-        };
-        let wparam = if is_down { WPARAM(0x0002) } else { WPARAM(0) };
-        let lparam = LPARAM(((y << 16) | x) as isize);
-
-        PostMessageW(Some(hwnd), message, wparam, lparam)
-            .map_err(|_| anyhow!("failed to post right-button window message"))?;
-        Ok(())
-    }
-}
-
-fn raw_window_handle(hwnd: HWND) -> Option<WindowToken> {
-    unsafe {
-        if hwnd.0.is_null() || !IsWindow(Some(hwnd)).as_bool() {
-            return None;
-        }
-
-        Some(WindowToken(hwnd.0 as isize))
     }
 }
 

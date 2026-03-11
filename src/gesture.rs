@@ -23,9 +23,9 @@ use crate::{
     config::{GestureAction, normalize_gesture},
     logging,
     win::{
-        MonitorBounds, WindowToken, ensure_current_thread_per_monitor_dpi_awareness, gesture_target_window_for_point,
-        input_window_at_point, monitor_from_point, monitor_scale_factor, post_right_button_down,
-        post_right_button_up, process_name_at_point, process_name_for_window,
+        MonitorBounds, WindowToken, ensure_current_thread_per_monitor_dpi_awareness,
+        gesture_target_window_for_point, monitor_from_point, monitor_scale_factor,
+        process_name_at_point, process_name_for_window,
     },
 };
 
@@ -86,14 +86,12 @@ struct GestureEngine {
 #[derive(Default)]
 struct GestureState {
     right_button_down: bool,
-    native_passthrough: bool,
     press_id: u64,
     gesture_mode: bool,
     minimum_distance: f32,
     start_monitor_bounds: Option<MonitorBounds>,
     start_process_name: Option<String>,
     start_target_window: Option<WindowToken>,
-    start_input_window: Option<WindowToken>,
     start_point: Option<windows::Win32::Foundation::POINT>,
     last_point: Option<windows::Win32::Foundation::POINT>,
     direction_anchor: Option<windows::Win32::Foundation::POINT>,
@@ -101,13 +99,19 @@ struct GestureState {
     directions: String,
 }
 
-struct PendingAction {
-    press_id: u64,
-    action: GestureAction,
-    process_name: String,
-    directions: String,
-    target_window: Option<WindowToken>,
-    dispatch_delay_ms: u64,
+enum PendingAction {
+    Gesture {
+        press_id: u64,
+        action: GestureAction,
+        process_name: String,
+        directions: String,
+        target_window: Option<WindowToken>,
+        dispatch_delay_ms: u64,
+    },
+    SyntheticClick {
+        press_id: u64,
+        process_name: String,
+    },
 }
 
 impl GestureEngine {
@@ -138,18 +142,10 @@ impl GestureEngine {
                     .unwrap_or(base_minimum_distance);
                 let point_process_name = process_name_at_point(point);
                 let start_target_window = gesture_target_window_for_point(point);
-                let start_input_window = input_window_at_point(point);
                 let target_process_name = start_target_window.and_then(process_name_for_window);
                 let effective_process_name = target_process_name
                     .clone()
                     .or_else(|| point_process_name.clone());
-                let native_passthrough_process_name = point_process_name
-                    .clone()
-                    .or_else(|| target_process_name.clone());
-                let native_passthrough = native_passthrough_process_name
-                    .as_deref()
-                    .is_some_and(prefers_native_right_button_passthrough)
-                    && start_input_window.is_some();
 
                 if point_process_name
                     .as_deref()
@@ -170,7 +166,6 @@ impl GestureEngine {
                     let mut state = self.state.lock();
                     state.press_id = state.press_id.wrapping_add(1);
                     state.right_button_down = true;
-                    state.native_passthrough = native_passthrough;
                     state.gesture_mode = false;
                     state.minimum_distance = minimum_distance;
                     state.start_point = Some(point);
@@ -178,7 +173,6 @@ impl GestureEngine {
                     state.direction_anchor = Some(point);
                     state.start_process_name = effective_process_name;
                     state.start_target_window = start_target_window;
-                    state.start_input_window = start_input_window;
                     state.points.clear();
                     state.points.push(point);
                     state.directions.clear();
@@ -191,24 +185,16 @@ impl GestureEngine {
                 };
 
                 logging::info(format!(
-                    "[press {}] right-down point=({}, {}) point_process={:?} target_process={:?} effective_process={:?} native_passthrough={} target_window={:?} minimum_distance={:.1}",
+                    "[press {}] right-down point=({}, {}) point_process={:?} target_process={:?} effective_process={:?} target_window={:?} minimum_distance={:.1}",
                     press_id,
                     point.x,
                     point.y,
                     point_process_name,
                     target_process_name,
                     effective_process_name_log,
-                    native_passthrough,
                     start_target_window,
                     minimum_distance
                 ));
-
-                if native_passthrough {
-                    logging::info(format!(
-                        "[press {}] defer native passthrough right-click until release input_window={:?}",
-                        press_id, start_input_window
-                    ));
-                }
 
                 true
             }
@@ -233,10 +219,9 @@ impl GestureEngine {
                     }
                     state.gesture_mode = true;
                     logging::info(format!(
-                        "[press {}] enter gesture mode total_distance={:.1} native_passthrough={} process='{}'",
+                        "[press {}] enter gesture mode total_distance={:.1} process='{}'",
                         state.press_id,
                         total_distance,
-                        state.native_passthrough,
                         state.start_process_name.as_deref().unwrap_or_default()
                     ));
 
@@ -280,70 +265,30 @@ impl GestureEngine {
                         return false;
                     }
 
+                    let gesture_mode = state.gesture_mode;
                     let snapshot = CompletedGesture {
                         press_id: state.press_id,
-                        gesture_mode: state.gesture_mode,
-                        native_passthrough: state.native_passthrough,
                         process_name: state.start_process_name.clone().unwrap_or_default(),
                         target_window: state.start_target_window,
-                        input_window: state.start_input_window,
-                        release_point: point,
                         directions: normalize_gesture(&state.directions),
                     };
                     reset_state(&mut state);
 
-                    if snapshot.gesture_mode {
+                    if gesture_mode {
                         MouseRelease::Gesture(snapshot)
-                    } else if snapshot.native_passthrough {
-                        MouseRelease::NativeClick(snapshot)
                     } else {
-                        MouseRelease::SyntheticClick
+                        MouseRelease::SyntheticClick(snapshot)
                     }
                 };
 
                 match release {
-                    MouseRelease::NativeClick(final_state) => {
-                        self.context.overlay().hide();
-                        logging::info(format!(
-                            "[press {}] right-up native click process='{}' native_passthrough={}",
-                            final_state.press_id,
-                            final_state.process_name,
-                            final_state.native_passthrough
-                        ));
-                        let Some(input_window) = final_state.input_window else {
-                            logging::warn(format!(
-                                "[press {}] missing input_window for native passthrough right-click replay",
-                                final_state.press_id
-                            ));
-                            return true;
-                        };
-                        if let Err(error) =
-                            post_right_button_down(input_window, final_state.release_point)
-                        {
-                            logging::error(format!(
-                                "[press {}] failed to replay native passthrough right-down: {error:#}",
-                                final_state.press_id
-                            ));
-                            return true;
-                        }
-                        if let Err(error) =
-                            post_right_button_up(input_window, final_state.release_point)
-                        {
-                            logging::error(format!(
-                                "[press {}] failed to replay native passthrough right-up: {error:#}",
-                                final_state.press_id
-                            ));
-                        }
-                        true
-                    }
                     MouseRelease::Gesture(final_state) => {
                         self.context.overlay().finish();
                         logging::info(format!(
-                            "[press {}] right-up gesture process='{}' directions='{}' native_passthrough={}",
+                            "[press {}] right-up gesture process='{}' directions='{}'",
                             final_state.press_id,
                             final_state.process_name,
                             final_state.directions,
-                            final_state.native_passthrough,
                         ));
 
                         if !final_state.directions.is_empty() {
@@ -357,7 +302,7 @@ impl GestureEngine {
                                     "[press {}] recognized gesture '{}' for process '{}'",
                                     final_state.press_id, directions, process_name
                                 ));
-                                if let Err(error) = queue_pending_action(PendingAction {
+                                if let Err(error) = queue_pending_action(PendingAction::Gesture {
                                     press_id: final_state.press_id,
                                     action,
                                     process_name,
@@ -382,11 +327,26 @@ impl GestureEngine {
 
                         true
                     }
-                    MouseRelease::SyntheticClick => {
+                    MouseRelease::SyntheticClick(final_state) => {
                         self.context.overlay().hide();
-                        logging::info("right-up synthetic click replay");
-                        if let Err(error) = send_right_click() {
-                            logging::error(format!("failed to replay right click: {error:#}"));
+                        logging::info(format!(
+                            "[press {}] queue synthetic right-click replay for process '{}'",
+                            final_state.press_id, final_state.process_name
+                        ));
+                        if let Err(error) = queue_pending_action(PendingAction::SyntheticClick {
+                            press_id: final_state.press_id,
+                            process_name: final_state.process_name.clone(),
+                        }) {
+                            logging::error(format!(
+                                "[press {}] failed to queue synthetic right click replay: {error:#}",
+                                final_state.press_id
+                            ));
+                            if let Err(error) = send_right_click() {
+                                logging::error(format!(
+                                    "[press {}] fallback synthetic right click replay failed: {error:#}",
+                                    final_state.press_id
+                                ));
+                            }
                         }
                         true
                     }
@@ -400,26 +360,14 @@ impl GestureEngine {
 #[derive(Default)]
 struct CompletedGesture {
     press_id: u64,
-    gesture_mode: bool,
-    native_passthrough: bool,
     process_name: String,
     target_window: Option<WindowToken>,
-    input_window: Option<WindowToken>,
-    release_point: windows::Win32::Foundation::POINT,
     directions: String,
 }
 
 enum MouseRelease {
-    NativeClick(CompletedGesture),
     Gesture(CompletedGesture),
-    SyntheticClick,
-}
-
-fn prefers_native_right_button_passthrough(process_name: &str) -> bool {
-    matches!(
-        process_name,
-        "code.exe" | "code-insiders.exe" | "cursor.exe" | "vscodium.exe" | "windsurf.exe"
-    )
+    SyntheticClick(CompletedGesture),
 }
 
 fn queue_pending_action(action: PendingAction) -> anyhow::Result<()> {
@@ -427,10 +375,25 @@ fn queue_pending_action(action: PendingAction) -> anyhow::Result<()> {
         .get()
         .ok_or_else(|| anyhow!("gesture hook thread is not ready"))?;
 
-    logging::info(format!(
-        "[press {}] queue gesture action '{}' for process '{}' target_window={:?}",
-        action.press_id, action.directions, action.process_name, action.target_window
-    ));
+    match &action {
+        PendingAction::Gesture {
+            press_id,
+            process_name,
+            directions,
+            target_window,
+            ..
+        } => logging::info(format!(
+            "[press {}] queue gesture action '{}' for process '{}' target_window={:?}",
+            press_id, directions, process_name, target_window
+        )),
+        PendingAction::SyntheticClick {
+            press_id,
+            process_name,
+        } => logging::info(format!(
+            "[press {}] queue synthetic right-click replay for process '{}'",
+            press_id, process_name
+        )),
+    }
 
     PENDING_ACTIONS.lock().push_back(action);
     unsafe {
@@ -453,49 +416,77 @@ fn run_pending_actions() {
             break;
         };
 
-        if pending.dispatch_delay_ms > 0 {
-            logging::info(format!(
-                "[press {}] wait {}ms for native passthrough right-up to settle before gesture action '{}'",
-                pending.press_id, pending.dispatch_delay_ms, pending.directions
-            ));
-            thread::sleep(Duration::from_millis(pending.dispatch_delay_ms));
-        }
+        match pending {
+            PendingAction::Gesture {
+                press_id,
+                action,
+                process_name,
+                directions,
+                target_window,
+                dispatch_delay_ms,
+            } => {
+                if dispatch_delay_ms > 0 {
+                    logging::info(format!(
+                        "[press {}] wait {}ms before gesture action '{}'",
+                        press_id, dispatch_delay_ms, directions
+                    ));
+                    thread::sleep(Duration::from_millis(dispatch_delay_ms));
+                }
 
-        logging::info(format!(
-            "[press {}] executing gesture action '{}' for process '{}' target_window={:?}",
-            pending.press_id, pending.directions, pending.process_name, pending.target_window
-        ));
+                logging::info(format!(
+                    "[press {}] executing gesture action '{}' for process '{}' target_window={:?}",
+                    press_id, directions, process_name, target_window
+                ));
 
-        if let Err(error) = actions::execute(&pending.action, pending.target_window) {
-            logging::error(format!(
-                "[press {}] failed to execute gesture '{}' for process '{}': {error:#}",
-                pending.press_id, pending.directions, pending.process_name
-            ));
-        } else {
-            logging::info(format!(
-                "[press {}] completed gesture action '{}' for process '{}'",
-                pending.press_id, pending.directions, pending.process_name
-            ));
+                if let Err(error) = actions::execute(&action, target_window) {
+                    logging::error(format!(
+                        "[press {}] failed to execute gesture '{}' for process '{}': {error:#}",
+                        press_id, directions, process_name
+                    ));
+                } else {
+                    logging::info(format!(
+                        "[press {}] completed gesture action '{}' for process '{}'",
+                        press_id, directions, process_name
+                    ));
+                }
+            }
+            PendingAction::SyntheticClick {
+                press_id,
+                process_name,
+            } => {
+                logging::info(format!(
+                    "[press {}] executing synthetic right-click replay for process '{}'",
+                    press_id, process_name
+                ));
+                if let Err(error) = send_right_click() {
+                    logging::error(format!(
+                        "[press {}] failed to replay synthetic right click for process '{}': {error:#}",
+                        press_id, process_name
+                    ));
+                } else {
+                    logging::info(format!(
+                        "[press {}] completed synthetic right-click replay for process '{}'",
+                        press_id, process_name
+                    ));
+                }
+            }
         }
     }
 }
 
 fn reset_state(state: &mut GestureState) {
     state.right_button_down = false;
-    state.native_passthrough = false;
     state.gesture_mode = false;
     state.minimum_distance = 0.0;
     state.start_monitor_bounds = None;
     state.start_process_name = None;
     state.start_target_window = None;
-    state.start_input_window = None;
     state.start_point = None;
     state.last_point = None;
     state.direction_anchor = None;
     state.points.clear();
     state.directions.clear();
 }
-
 fn dominant_direction(
     start: windows::Win32::Foundation::POINT,
     end: windows::Win32::Foundation::POINT,
