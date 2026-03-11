@@ -49,6 +49,7 @@ const createEmptyBinding = (): GestureBinding => ({
 const createEmptyRule = (): ApplicationRule => ({
   id: crypto.randomUUID(),
   name: '',
+  enabled: true,
   processNames: [],
   gestures: [createEmptyBinding()]
 })
@@ -511,6 +512,8 @@ export default function App() {
                 {config.appRules.map((rule) => (
                   <ProcessRuleListItem
                     key={rule.id}
+                    enabled={rule.enabled}
+                    statusLabel={rule.enabled ? t.enabled : t.disabled}
                     title={formatProcessNames(rule.processNames, t.emptyProcessNames)}
                     subtitle={rule.name.trim() || t.unnamedRule}
                     processNames={rule.processNames}
@@ -589,7 +592,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className='mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]'>
+                  <div className='mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1.1fr)_15rem]'>
                     <label className='setting-card'>
                       <span className='field-label'>{t.ruleName}</span>
                       <input
@@ -627,6 +630,19 @@ export default function App() {
                         }}
                       />
                     </label>
+
+                    <SettingPillSwitch
+                      checked={selectedRule.enabled}
+                      label={t.ruleEnabled}
+                      onChange={(checked) =>
+                        patchConfig((current) => ({
+                          ...current,
+                          appRules: current.appRules.map((item, index) =>
+                            index === selectedRuleIndex ? { ...item, enabled: checked } : item
+                          )
+                        }))
+                      }
+                    />
                   </div>
 
                   <div className='mt-4 space-y-3'>
@@ -918,22 +934,38 @@ function ProcessRuleListItem(props: {
   title: string
   subtitle: string
   processNames: string[]
+  enabled?: boolean
+  statusLabel?: string
   selected: boolean
   onClick: () => void
 }) {
   return (
     <button
       className={
-        props.selected
+        (props.selected
           ? 'rule-card rule-card--selected group focus-visible:ring-blue-300'
-          : 'rule-card rule-card--idle group'
+          : 'rule-card rule-card--idle group') + (props.enabled === false ? ' opacity-75' : '')
       }
       onClick={props.onClick}
       type='button'
     >
       <div className={props.selected ? 'absolute inset-y-0 left-0 w-1 bg-blue-500' : 'absolute inset-y-0 left-0 w-1 bg-transparent'} />
       <div className='pl-2'>
-        <div className='text-sm font-semibold leading-5 text-slate-900'>{props.title}</div>
+        <div className='flex items-start justify-between gap-2'>
+          <div className='text-sm font-semibold leading-5 text-slate-900'>{props.title}</div>
+          {props.statusLabel && (
+            <span
+              className={
+                'shrink-0 rounded-full px-2 py-1 text-[0.68rem] font-semibold ' +
+                (props.enabled === false
+                  ? 'bg-slate-200 text-slate-600'
+                  : 'bg-emerald-50 text-emerald-700')
+              }
+            >
+              {props.statusLabel}
+            </span>
+          )}
+        </div>
         <div className='mt-0.5 text-xs text-slate-500'>{props.subtitle}</div>
         {props.processNames.length > 0 && (
           <div className='mt-2 flex flex-wrap gap-1.5'>

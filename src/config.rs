@@ -49,6 +49,8 @@ pub struct GeneralSettings {
 pub struct ApplicationRule {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_rule_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     pub process_names: Vec<String>,
     #[serde(default)]
@@ -183,6 +185,10 @@ impl AppConfig {
         let gesture = normalize_gesture(gesture);
 
         for rule in &self.app_rules {
+            if !rule.enabled {
+                continue;
+            }
+
             if rule
                 .process_names
                 .iter()
@@ -332,6 +338,10 @@ fn default_autostart() -> bool {
     true
 }
 
+fn default_rule_enabled() -> bool {
+    true
+}
+
 fn default_default_actions() -> Vec<GestureBinding> {
     Vec::new()
 }
@@ -341,6 +351,7 @@ fn default_app_rules() -> Vec<ApplicationRule> {
         ApplicationRule {
             id: "chrome".to_string(),
             name: "Chrome / Edge".to_string(),
+            enabled: default_rule_enabled(),
             process_names: vec!["chrome.exe".to_string(), "msedge.exe".to_string()],
             gestures: vec![
                 default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),
@@ -355,6 +366,7 @@ fn default_app_rules() -> Vec<ApplicationRule> {
         ApplicationRule {
             id: "explorer".to_string(),
             name: "Explorer".to_string(),
+            enabled: default_rule_enabled(),
             process_names: vec!["explorer.exe".to_string()],
             gestures: vec![
                 default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),
@@ -367,6 +379,7 @@ fn default_app_rules() -> Vec<ApplicationRule> {
         ApplicationRule {
             id: "vscode".to_string(),
             name: "Visual Studio Code".to_string(),
+            enabled: default_rule_enabled(),
             process_names: vec!["code.exe".to_string()],
             gestures: vec![
                 default_hotkey_binding("L", "返回", &["Alt"], "ArrowLeft"),

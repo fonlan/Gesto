@@ -33,12 +33,15 @@ export interface I18nText {
   addRule: string
   addBinding: string
   ruleName: string
+  ruleEnabled: string
   processNames: string
   processHint: string
   globalProcessName: string
   globalProcessHint: string
   emptyProcessNames: string
   unnamedRule: string
+  enabled: string
+  disabled: string
   gesture: string
   description: string
   descriptionPlaceholder: string
@@ -90,12 +93,15 @@ export const messages: Record<Locale, I18nText> = {
     addRule: '新增程序规则',
     addBinding: '新增手势',
     ruleName: '规则名称',
+    ruleEnabled: '启用此规则',
     processNames: '进程名',
     processHint: '多个进程名请用逗号分隔，例如 chrome.exe, msedge.exe',
     globalProcessName: '全局规则',
     globalProcessHint: '当没有命中专属程序规则时，将应用这里的默认手势。',
     emptyProcessNames: '暂未设置进程名',
     unnamedRule: '未命名规则',
+    enabled: '已启用',
+    disabled: '已禁用',
     gesture: '手势',
     description: '作用描述',
     descriptionPlaceholder: '例如：返回上一页',
@@ -145,12 +151,15 @@ export const messages: Record<Locale, I18nText> = {
     addRule: 'Add App Rule',
     addBinding: 'Add Gesture',
     ruleName: 'Rule Name',
+    ruleEnabled: 'Enable this rule',
     processNames: 'Process Names',
     processHint: 'Separate multiple process names with commas, e.g. chrome.exe, msedge.exe',
     globalProcessName: 'Global Rule',
     globalProcessHint: 'These default gestures apply when no app-specific rule matches.',
     emptyProcessNames: 'No process names yet',
     unnamedRule: 'Unnamed Rule',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
     gesture: 'Gesture',
     description: 'Description',
     descriptionPlaceholder: 'e.g. Go back to the previous page',

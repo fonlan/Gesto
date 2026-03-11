@@ -22,6 +22,7 @@ export interface GeneralSettings {
 export interface ApplicationRule {
   id: string
   name: string
+  enabled: boolean
   processNames: string[]
   gestures: GestureBinding[]
 }
