@@ -35,6 +35,7 @@ const HOTKEY_KEY_OPTIONS = [
 ]
 const GLOBAL_RULE_ID = '__global__'
 const BINDING_PANEL_CLASS = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5'
+const SAVE_MESSAGE_DURATION_MS = 5000
 
 const createEmptyBinding = (): GestureBinding => ({
   gesture: '',
@@ -245,6 +246,20 @@ export default function App() {
       setSelectedRuleId(GLOBAL_RULE_ID)
     }
   }, [config, selectedRuleId])
+
+  useEffect(() => {
+    if (!message || error) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMessage('')
+    }, SAVE_MESSAGE_DURATION_MS)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [error, message])
 
   const patchConfig = (updater: (current: AppConfig) => AppConfig) => {
     setConfig((current) => (current ? updater(current) : current))
@@ -675,12 +690,12 @@ export default function App() {
         </section>
       </div>
 
-      <div className='pointer-events-none fixed bottom-5 right-3 z-40 flex max-w-[calc(100vw-1.5rem)] flex-col items-end gap-3 sm:bottom-6 sm:right-[max(1.5rem,calc((100vw-88rem)/2))] sm:max-w-sm sm:translate-x-[calc(100%+1rem)]'>
+      <div className='pointer-events-none fixed bottom-5 right-3 z-40 sm:bottom-6 sm:right-[max(1.5rem,calc((100vw-88rem)/2))] sm:translate-x-[calc(100%+1rem)]'>
         {(message || error) && (
           <div
             aria-live='polite'
             className={
-              'pointer-events-auto rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur ' +
+              'pointer-events-auto absolute bottom-full left-0 mb-3 max-w-[calc(100vw-1.5rem)] rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur sm:max-w-sm ' +
               (error
                 ? 'border border-red-200 bg-red-50/95 text-red-700'
                 : 'border border-emerald-200 bg-emerald-50/95 text-emerald-700')
