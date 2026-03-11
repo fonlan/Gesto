@@ -6,9 +6,10 @@ use std::{
 
 use anyhow::{Context, anyhow};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_BACK,
-    VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_HOME, VK_LEFT, VK_LWIN, VK_MENU,
-    VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY,
+    KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE,
+    VK_F1, VK_HOME, VK_LEFT, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_NEXT, VK_PRIOR,
+    VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
 };
 
 use crate::{
@@ -86,15 +87,15 @@ fn send_hotkey_inputs(spec: &HotkeySpec) -> anyhow::Result<()> {
         let key = modifier_to_vk(modifier)
             .ok_or_else(|| anyhow!("unsupported modifier: {}", modifier))?;
         modifier_keys.push(key);
-        inputs.push(keyboard_input(key, Default::default()));
+        inputs.push(keyboard_input(key, false));
     }
 
     let key = token_to_vk(&spec.key).ok_or_else(|| anyhow!("unsupported key: {}", spec.key))?;
-    inputs.push(keyboard_input(key, Default::default()));
-    inputs.push(keyboard_input(key, KEYEVENTF_KEYUP));
+    inputs.push(keyboard_input(key, false));
+    inputs.push(keyboard_input(key, true));
 
     for modifier in modifier_keys.into_iter().rev() {
-        inputs.push(keyboard_input(modifier, KEYEVENTF_KEYUP));
+        inputs.push(keyboard_input(modifier, true));
     }
 
     unsafe {
@@ -111,17 +112,14 @@ fn send_hotkey_inputs(spec: &HotkeySpec) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn keyboard_input(
-    vk: VIRTUAL_KEY,
-    flags: windows::Win32::UI::Input::KeyboardAndMouse::KEYBD_EVENT_FLAGS,
-) -> INPUT {
+fn keyboard_input(vk: VIRTUAL_KEY, is_key_up: bool) -> INPUT {
     INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
                 wVk: vk,
                 wScan: 0,
-                dwFlags: flags,
+                dwFlags: keyboard_event_flags(vk, is_key_up),
                 time: 0,
                 dwExtraInfo: 0,
             },
@@ -129,11 +127,32 @@ fn keyboard_input(
     }
 }
 
+fn keyboard_event_flags(vk: VIRTUAL_KEY, is_key_up: bool) -> KEYBD_EVENT_FLAGS {
+    let mut flags = 0;
+
+    if is_extended_key(vk) {
+        flags |= KEYEVENTF_EXTENDEDKEY.0;
+    }
+
+    if is_key_up {
+        flags |= KEYEVENTF_KEYUP.0;
+    }
+
+    KEYBD_EVENT_FLAGS(flags)
+}
+
+fn is_extended_key(vk: VIRTUAL_KEY) -> bool {
+    matches!(
+        vk,
+        VK_DELETE | VK_END | VK_HOME | VK_LEFT | VK_NEXT | VK_PRIOR | VK_RIGHT | VK_UP | VK_DOWN
+    )
+}
+
 fn modifier_to_vk(token: &str) -> Option<VIRTUAL_KEY> {
     match token {
-        "Ctrl" => Some(VK_CONTROL),
-        "Alt" => Some(VK_MENU),
-        "Shift" => Some(VK_SHIFT),
+        "Ctrl" => Some(VK_LCONTROL),
+        "Alt" => Some(VK_LMENU),
+        "Shift" => Some(VK_LSHIFT),
         "Win" => Some(VK_LWIN),
         _ => None,
     }
