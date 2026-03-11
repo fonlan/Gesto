@@ -308,8 +308,8 @@ export default function App() {
   }
 
   return (
-    <div className='min-h-screen bg-slate-100 px-4 py-4 pb-28 text-slate-900 sm:px-6 sm:py-6 sm:pb-32'>
-      <div className='mx-auto flex max-w-[88rem] flex-col gap-4'>
+    <div className='min-h-screen bg-slate-100 px-4 py-4 pb-28 text-slate-900 sm:px-0 sm:py-6 sm:pb-32'>
+      <div className='mx-auto flex w-full max-w-none flex-col gap-4 sm:px-[clamp(4rem,5vw,5.5rem)]'>
         <header className='overflow-hidden rounded-[1.75rem] bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-900 text-white shadow-panel'>
           <div className='flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-end lg:justify-between'>
             <div className='space-y-3'>
@@ -690,7 +690,7 @@ export default function App() {
         </section>
       </div>
 
-      <div className='pointer-events-none fixed bottom-5 right-3 z-40 sm:bottom-6 sm:right-[max(1.5rem,calc((100vw-88rem)/2))] sm:translate-x-[calc(100%+1rem)]'>
+      <div className='pointer-events-none fixed bottom-5 right-3 z-40 sm:bottom-6 sm:right-[clamp(1rem,2vw,1.5rem)]'>
         {(message || error) && (
           <div
             aria-live='polite'
