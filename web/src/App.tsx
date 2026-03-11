@@ -34,7 +34,7 @@ const HOTKEY_KEY_OPTIONS = [
   'PageDown'
 ]
 const GLOBAL_RULE_ID = '__global__'
-const BINDING_PANEL_CLASS = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5'
+const BINDING_PANEL_CLASS = 'gesture-card-panel rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 transition-colors duration-200'
 const SAVE_MESSAGE_DURATION_MS = 5000
 
 const createEmptyBinding = (): GestureBinding => ({
@@ -925,8 +925,8 @@ function ProcessRuleListItem(props: {
     <button
       className={
         props.selected
-          ? 'relative w-full overflow-hidden rounded-[1.25rem] border border-blue-200 bg-white px-3.5 py-3 text-left shadow-sm ring-1 ring-blue-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300'
-          : 'relative w-full overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200'
+          ? 'rule-card rule-card--selected group focus-visible:ring-blue-300'
+          : 'rule-card rule-card--idle group'
       }
       onClick={props.onClick}
       type='button'
@@ -943,7 +943,7 @@ function ProcessRuleListItem(props: {
                 className={
                   props.selected
                     ? 'rounded-full bg-blue-50 px-2 py-1 text-[0.7rem] font-medium text-blue-700'
-                    : 'rounded-full bg-slate-100 px-2 py-1 text-[0.7rem] font-medium text-slate-600'
+                    : 'rounded-full bg-slate-100 px-2 py-1 text-[0.7rem] font-medium text-slate-600 transition-colors duration-200 group-hover:bg-blue-50 group-hover:text-blue-700'
                 }
               >
                 {processName}
@@ -965,7 +965,7 @@ function BindingEditor(props: {
   const actionType = props.binding.action.type
 
   return (
-    <div className='rounded-[1.25rem] border border-slate-200 bg-white p-3.5'>
+    <div className='gesture-card group rounded-[1.25rem] border border-slate-200 bg-white p-3.5'>
       <div className='grid gap-3 xl:grid-cols-[11.5rem_minmax(0,1fr)]'>
         <div className={BINDING_PANEL_CLASS}>
           <label className='field-label'>{props.text.gesture}</label>
@@ -1190,3 +1190,4 @@ function HotkeyRecorder(props: {
     </div>
   )
 }
+

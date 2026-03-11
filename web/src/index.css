@@ -22,6 +22,104 @@ body {
   @apply rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5;
 }
 
+.rule-card {
+  @apply relative isolate w-full overflow-hidden rounded-[1.25rem] border bg-white px-3.5 py-3 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200;
+}
+
+.rule-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at top right, rgb(96 165 250 / 0.2), transparent 42%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0));
+  opacity: 0;
+  transform: scale(0.985);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  pointer-events: none;
+}
+
+.rule-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.rule-card:hover,
+.rule-card:focus-visible {
+  transform: translateY(-2px);
+}
+
+.rule-card:hover::after,
+.rule-card:focus-visible::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.rule-card--idle {
+  @apply border-slate-200;
+}
+
+.rule-card--idle:hover,
+.rule-card--idle:focus-visible {
+  border-color: rgb(191 219 254);
+  box-shadow: 0 16px 32px -24px rgb(59 130 246 / 0.42);
+}
+
+.rule-card--selected {
+  @apply border-blue-200 ring-1 ring-blue-100;
+  box-shadow: 0 10px 24px -22px rgb(37 99 235 / 0.6);
+}
+
+.rule-card--selected:hover,
+.rule-card--selected:focus-visible {
+  box-shadow: 0 18px 36px -26px rgb(37 99 235 / 0.52);
+}
+
+.gesture-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: transform 200ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+.gesture-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at top right, rgb(96 165 250 / 0.16), transparent 42%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0));
+  opacity: 0;
+  transform: scale(0.985);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  pointer-events: none;
+}
+
+.gesture-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gesture-card:hover,
+.gesture-card:focus-within {
+  transform: translateY(-2px);
+  border-color: rgb(191 219 254);
+  box-shadow: 0 18px 36px -28px rgb(59 130 246 / 0.38);
+}
+
+.gesture-card:hover::after,
+.gesture-card:focus-within::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.gesture-card:hover .gesture-card-panel,
+.gesture-card:focus-within .gesture-card-panel {
+  border-color: rgb(219 234 254);
+  background: rgb(248 250 252 / 0.92);
+}
 .field-label {
   @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500;
 }
@@ -41,3 +139,4 @@ body {
 .btn-danger {
   @apply inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200;
 }
+
