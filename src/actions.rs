@@ -1,15 +1,11 @@
-use std::{
-    process::Command,
-    thread,
-    time::Duration,
-};
+use std::{process::Command, thread, time::Duration};
 
 use anyhow::{Context, anyhow};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY,
-    KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE,
-    VK_F1, VK_HOME, VK_LEFT, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_NEXT, VK_PRIOR,
-    VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
+    KEYEVENTF_KEYUP, SendInput, VIRTUAL_KEY, VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1,
+    VK_HOME, VK_LCONTROL, VK_LEFT, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_NEXT, VK_PRIOR, VK_RETURN,
+    VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
 };
 
 use crate::{
@@ -45,13 +41,13 @@ pub fn execute(action: &GestureAction, target_window: Option<WindowToken>) -> an
 }
 
 fn send_hotkey(spec: &HotkeySpec, target_window: Option<WindowToken>) -> anyhow::Result<()> {
-    let restore_window = if let Some(target_window) = target_window {
+    let restore_request = if let Some(target_window) = target_window {
         let current_foreground = foreground_window();
         if current_foreground != Some(target_window) {
             activate_window(target_window)
                 .context("failed to activate target window for hotkey delivery")?;
             thread::sleep(Duration::from_millis(HOTKEY_TARGET_SETTLE_DELAY_MS));
-            current_foreground
+            current_foreground.map(|previous_window| (previous_window, target_window))
         } else {
             None
         }
@@ -61,17 +57,26 @@ fn send_hotkey(spec: &HotkeySpec, target_window: Option<WindowToken>) -> anyhow:
 
     let result = send_hotkey_inputs(spec);
 
-    if let Some(window) = restore_window {
-        schedule_foreground_restore(window);
+    if let Some((previous_window, activated_target_window)) = restore_request {
+        schedule_foreground_restore(previous_window, activated_target_window);
     }
 
     result
 }
 
-fn schedule_foreground_restore(window: WindowToken) {
+fn schedule_foreground_restore(previous_window: WindowToken, activated_target_window: WindowToken) {
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(HOTKEY_FOREGROUND_RESTORE_DELAY_MS));
-        if let Err(error) = activate_window(window) {
+        let current_foreground = foreground_window();
+        if current_foreground != Some(activated_target_window) {
+            logging::info(format!(
+                "skip restoring previous foreground window because current foreground changed away from target: target={:?} current={:?}",
+                activated_target_window, current_foreground
+            ));
+            return;
+        }
+
+        if let Err(error) = activate_window(previous_window) {
             logging::warn(format!(
                 "failed to restore previous foreground window after hotkey: {error:#}"
             ));

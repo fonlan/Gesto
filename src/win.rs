@@ -1,6 +1,8 @@
 use anyhow::anyhow;
 use std::{mem::size_of, os::windows::ffi::OsStrExt, path::Path};
 
+use crate::logging;
+
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HWND, POINT, RECT},
@@ -22,7 +24,7 @@ use windows::{
                 SetActiveWindow, SetFocus, VK_MENU,
             },
             WindowsAndMessaging::{
-                BringWindowToTop, GA_ROOT, GetAncestor, GetForegroundWindow,
+                BringWindowToTop, GA_ROOT, GetAncestor, GetCursorPos, GetForegroundWindow,
                 GetWindowThreadProcessId, IsIconic, IsWindow, SW_RESTORE, SetForegroundWindow,
                 ShowWindow, WindowFromPoint,
             },
@@ -87,15 +89,27 @@ pub fn enable_per_monitor_dpi_awareness() -> anyhow::Result<()> {
 
 pub fn ensure_current_thread_per_monitor_dpi_awareness() {
     unsafe {
-        let _ = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        if SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).0
+            == std::ptr::null_mut()
+        {
+            logging::warn(
+                "failed to enable per-monitor DPI awareness for current thread; continuing with existing DPI context",
+            );
+        }
     }
 }
 
 pub fn monitor_scale_factor(monitor: MonitorToken) -> f32 {
-    monitor_effective_dpi(monitor)
-        .map(|dpi| dpi as f32 / 96.0)
-        .filter(|scale| *scale > 0.0)
-        .unwrap_or(1.0)
+    match monitor_effective_dpi(monitor) {
+        Some(dpi) if dpi > 0 => dpi as f32 / 96.0,
+        _ => {
+            logging::warn(format!(
+                "failed to query effective DPI for monitor {:?}; falling back to scale factor 1.0",
+                monitor
+            ));
+            1.0
+        }
+    }
 }
 
 pub fn monitor_from_point(point: POINT) -> Option<(MonitorToken, MonitorBounds)> {
@@ -153,6 +167,16 @@ pub fn window_at_point(point: POINT) -> Option<WindowToken> {
     unsafe { normalize_window_handle(WindowFromPoint(point)) }
 }
 
+pub fn current_cursor_position() -> Option<POINT> {
+    unsafe {
+        let mut point = POINT::default();
+        if GetCursorPos(&mut point).is_ok() {
+            Some(point)
+        } else {
+            None
+        }
+    }
+}
 
 pub fn process_name_at_point(point: POINT) -> Option<String> {
     process_name_for_window(window_at_point(point)?)
@@ -161,7 +185,6 @@ pub fn process_name_at_point(point: POINT) -> Option<String> {
 pub fn process_name_for_window(window: WindowToken) -> Option<String> {
     process_name_for_hwnd(window.hwnd())
 }
-
 
 pub fn activate_window(window: WindowToken) -> anyhow::Result<()> {
     unsafe {

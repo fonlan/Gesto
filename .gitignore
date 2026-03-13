@@ -8,3 +8,4 @@ web/vite.config.d.ts
 .agents/
 AGENTS.md
 skills-lock.json
+.golutra/

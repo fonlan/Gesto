@@ -23,9 +23,10 @@ use crate::{
     config::{GestureAction, normalize_gesture},
     logging,
     win::{
-        MonitorBounds, WindowToken, ensure_current_thread_per_monitor_dpi_awareness,
-        gesture_target_window_for_point, monitor_from_point, monitor_scale_factor,
-        process_name_at_point, process_name_for_window,
+        MonitorBounds, WindowToken, current_cursor_position,
+        ensure_current_thread_per_monitor_dpi_awareness, gesture_target_window_for_point,
+        monitor_from_point, monitor_scale_factor, process_name_at_point, process_name_for_window,
+        window_at_point,
     },
 };
 
@@ -111,6 +112,8 @@ enum PendingAction {
     SyntheticClick {
         press_id: u64,
         process_name: String,
+        release_point: windows::Win32::Foundation::POINT,
+        release_target_window: Option<WindowToken>,
     },
 }
 
@@ -224,7 +227,6 @@ impl GestureEngine {
                         total_distance,
                         state.start_process_name.as_deref().unwrap_or_default()
                     ));
-
                 }
 
                 if state
@@ -271,6 +273,8 @@ impl GestureEngine {
                         process_name: state.start_process_name.clone().unwrap_or_default(),
                         target_window: state.start_target_window,
                         directions: normalize_gesture(&state.directions),
+                        release_point: point,
+                        release_target_window: window_at_point(point),
                     };
                     reset_state(&mut state);
 
@@ -286,9 +290,7 @@ impl GestureEngine {
                         self.context.overlay().finish();
                         logging::info(format!(
                             "[press {}] right-up gesture process='{}' directions='{}'",
-                            final_state.press_id,
-                            final_state.process_name,
-                            final_state.directions,
+                            final_state.press_id, final_state.process_name, final_state.directions,
                         ));
 
                         if !final_state.directions.is_empty() {
@@ -336,17 +338,13 @@ impl GestureEngine {
                         if let Err(error) = queue_pending_action(PendingAction::SyntheticClick {
                             press_id: final_state.press_id,
                             process_name: final_state.process_name.clone(),
+                            release_point: final_state.release_point,
+                            release_target_window: final_state.release_target_window,
                         }) {
                             logging::error(format!(
                                 "[press {}] failed to queue synthetic right click replay: {error:#}",
                                 final_state.press_id
                             ));
-                            if let Err(error) = send_right_click() {
-                                logging::error(format!(
-                                    "[press {}] fallback synthetic right click replay failed: {error:#}",
-                                    final_state.press_id
-                                ));
-                            }
                         }
                         true
                     }
@@ -363,6 +361,8 @@ struct CompletedGesture {
     process_name: String,
     target_window: Option<WindowToken>,
     directions: String,
+    release_point: windows::Win32::Foundation::POINT,
+    release_target_window: Option<WindowToken>,
 }
 
 enum MouseRelease {
@@ -389,9 +389,11 @@ fn queue_pending_action(action: PendingAction) -> anyhow::Result<()> {
         PendingAction::SyntheticClick {
             press_id,
             process_name,
+            release_point,
+            release_target_window,
         } => logging::info(format!(
-            "[press {}] queue synthetic right-click replay for process '{}'",
-            press_id, process_name
+            "[press {}] queue synthetic right-click replay for process '{}' release_point=({}, {}) release_target_window={:?}",
+            press_id, process_name, release_point.x, release_point.y, release_target_window
         )),
     }
 
@@ -453,11 +455,16 @@ fn run_pending_actions() {
             PendingAction::SyntheticClick {
                 press_id,
                 process_name,
+                release_point,
+                release_target_window,
             } => {
                 logging::info(format!(
-                    "[press {}] executing synthetic right-click replay for process '{}'",
-                    press_id, process_name
+                    "[press {}] executing synthetic right-click replay for process '{}' release_point=({}, {}) release_target_window={:?}",
+                    press_id, process_name, release_point.x, release_point.y, release_target_window
                 ));
+                if !should_replay_synthetic_click(press_id, release_point, release_target_window) {
+                    continue;
+                }
                 if let Err(error) = send_right_click() {
                     logging::error(format!(
                         "[press {}] failed to replay synthetic right click for process '{}': {error:#}",
@@ -509,6 +516,43 @@ fn euclidean_distance(
     let dx = (end.x - start.x) as f32;
     let dy = (end.y - start.y) as f32;
     (dx * dx + dy * dy).sqrt()
+}
+
+fn should_replay_synthetic_click(
+    press_id: u64,
+    release_point: windows::Win32::Foundation::POINT,
+    release_target_window: Option<WindowToken>,
+) -> bool {
+    let Some(current_cursor) = current_cursor_position() else {
+        logging::warn(format!(
+            "[press {}] skip synthetic right-click replay because current cursor position is unavailable",
+            press_id
+        ));
+        return false;
+    };
+
+    if current_cursor.x != release_point.x || current_cursor.y != release_point.y {
+        logging::warn(format!(
+            "[press {}] skip synthetic right-click replay because cursor moved from release_point=({}, {}) to current_point=({}, {})",
+            press_id, release_point.x, release_point.y, current_cursor.x, current_cursor.y
+        ));
+        return false;
+    }
+
+    let current_target_window = window_at_point(release_point);
+    if current_target_window != release_target_window {
+        logging::warn(format!(
+            "[press {}] skip synthetic right-click replay because release_target_window={:?} changed to current_target_window={:?} at release_point=({}, {})",
+            press_id,
+            release_target_window,
+            current_target_window,
+            release_point.x,
+            release_point.y
+        ));
+        return false;
+    }
+
+    true
 }
 
 fn send_right_click() -> anyhow::Result<()> {
