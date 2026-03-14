@@ -1,5 +1,6 @@
 import { KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import appIconUrl from '../../logo.png'
+import { collectGestureConflicts } from './gestureConflicts'
 
 import { messages, type I18nText } from './i18n'
 import type {
@@ -198,13 +199,61 @@ const normalizeActionType = (type: GestureAction['type']): GestureAction => {
   }
 }
 
+const formatGestureConflictMessage = (gesture: string | undefined, text: I18nText) =>
+  gesture ? `${text.duplicateGestureConflict} (${gesture})` : undefined
+const createActionSnapshot = (action: GestureAction): GestureAction => {
+  if (action.type === 'none') {
+    return { type: 'none' }
+  }
+
+  if (action.type === 'shell') {
+    return {
+      type: 'shell',
+      command: action.command
+    }
+  }
+
+  return {
+    type: 'hotkey',
+    hotkey: normalizeHotkey(action.hotkey)
+  }
+}
+
+const createBindingSnapshot = (binding: GestureBinding): GestureBinding => ({
+  gesture: normalizeGesture(binding.gesture),
+  description: binding.description,
+  action: createActionSnapshot(binding.action)
+})
+
+const createRuleSnapshot = (rule: ApplicationRule): ApplicationRule => ({
+  id: rule.id,
+  name: rule.name,
+  enabled: rule.enabled,
+  processNames: rule.processNames.map((item) => item.trim()).filter(Boolean),
+  gestures: rule.gestures.map(createBindingSnapshot)
+})
+
+const createConfigSnapshot = (config: AppConfig) =>
+  JSON.stringify({
+    version: config.version,
+    locale: config.locale === 'en-US' ? 'en-US' : 'zh-CN',
+    general: {
+      ...config.general,
+      ignoredProcessNames: config.general.ignoredProcessNames.map((item) => item.trim()).filter(Boolean)
+    },
+    defaultActions: config.defaultActions.map(createBindingSnapshot),
+    appRules: config.appRules.map(createRuleSnapshot)
+  })
+
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [status, setStatus] = useState<StatusPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const [message, setMessage] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [ruleSearchQuery, setRuleSearchQuery] = useState('')
   const [selectedRuleId, setSelectedRuleId] = useState<string>(GLOBAL_RULE_ID)
   const fallbackText = messages['zh-CN']
 
@@ -224,6 +273,7 @@ export default function App() {
         const configPayload = (await configResponse.json()) as AppConfig
         const statusPayload = (await statusResponse.json()) as StatusPayload
         setConfig(configPayload)
+        setSavedSnapshot(createConfigSnapshot(configPayload))
         setStatus(statusPayload)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : fallbackText.unknownError)
@@ -237,6 +287,9 @@ export default function App() {
 
   const locale: Locale = config?.locale ?? 'zh-CN'
   const t = useMemo(() => messages[locale], [locale])
+  const currentSnapshot = useMemo(() => (config ? createConfigSnapshot(config) : null), [config])
+  const isDirty = currentSnapshot !== null && savedSnapshot !== null && currentSnapshot !== savedSnapshot
+  const unsavedNotice = !saving && isDirty ? t.unsavedChangesHint : ''
 
   useEffect(() => {
     if (!config || selectedRuleId === GLOBAL_RULE_ID) {
@@ -262,18 +315,107 @@ export default function App() {
     }
   }, [error, message])
 
+  useEffect(() => {
+    if (!isDirty || saving) {
+      return
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = t.unsavedChangesGuard
+      return t.unsavedChangesGuard
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isDirty, saving, t.unsavedChangesGuard])
+
   const patchConfig = (updater: (current: AppConfig) => AppConfig) => {
+    setError('')
+    setMessage('')
     setConfig((current) => (current ? updater(current) : current))
   }
 
   const selectedRuleIndex = config?.appRules.findIndex((rule) => rule.id === selectedRuleId) ?? -1
   const selectedRule = selectedRuleIndex >= 0 && config ? config.appRules[selectedRuleIndex] : null
+  const normalizedRuleSearchQuery = ruleSearchQuery.trim().toLocaleLowerCase()
+  const filteredAppRules = useMemo(() => {
+    if (!config) {
+      return []
+    }
+
+    if (!normalizedRuleSearchQuery) {
+      return config.appRules
+    }
+
+    return config.appRules.filter((rule) => {
+      const normalizedRuleName = rule.name.trim().toLocaleLowerCase()
+      if (normalizedRuleName.includes(normalizedRuleSearchQuery)) {
+        return true
+      }
+
+      return rule.processNames.some((processName) =>
+        processName.toLocaleLowerCase().includes(normalizedRuleSearchQuery)
+      )
+    })
+  }, [config, normalizedRuleSearchQuery])
   const totalBindings =
     (config?.defaultActions.length ?? 0) +
     (config?.appRules.reduce((count, rule) => count + rule.gestures.length, 0) ?? 0)
 
-  const saveConfig = async () => {
+  const defaultGestureConflicts = useMemo<ReturnType<typeof collectGestureConflicts>>(
+    () =>
+      config
+        ? collectGestureConflicts(config.defaultActions)
+        : { duplicateGestures: [] as string[], byIndex: {} as Record<number, string> },
+    [config]
+  )
+  const appRuleGestureConflicts = useMemo<Record<string, ReturnType<typeof collectGestureConflicts>>>(
+    () =>
+      config
+        ? Object.fromEntries(config.appRules.map((rule) => [rule.id, collectGestureConflicts(rule.gestures)]))
+        : {},
+    [config]
+  )
+  const saveBlockedReason = useMemo(() => {
     if (!config) {
+      return ''
+    }
+
+    const summaries: string[] = []
+    if (defaultGestureConflicts.duplicateGestures.length > 0) {
+      summaries.push(`${t.globalProcessName}: ${defaultGestureConflicts.duplicateGestures.join(', ')}`)
+    }
+
+    config.appRules.forEach((rule) => {
+      const conflict = appRuleGestureConflicts[rule.id]
+      if (!conflict || conflict.duplicateGestures.length === 0) {
+        return
+      }
+
+      summaries.push(`${getRuleEditorTitle(rule, t)}: ${conflict.duplicateGestures.join(', ')}`)
+    })
+
+    if (summaries.length === 0) {
+      return ''
+    }
+
+    return `${t.saveBlockedByGestureConflicts} ${summaries.join(locale === 'zh-CN' ? '；' : '; ')}`
+  }, [appRuleGestureConflicts, config, defaultGestureConflicts, locale, t])
+  const hasGestureConflicts = saveBlockedReason.length > 0
+  const saveBlockedNotice = !saving && hasGestureConflicts ? saveBlockedReason : ''
+  const saveButtonTitle = saving
+    ? t.saving
+    : hasGestureConflicts
+      ? saveBlockedReason
+      : isDirty
+        ? t.save
+        : t.noChangesToSave
+  const saveConfig = async () => {
+    if (!config || !isDirty || hasGestureConflicts) {
       return
     }
 
@@ -291,8 +433,10 @@ export default function App() {
       }
 
       const updated = (await response.json()) as AppConfig
+      const nextLocale: Locale = updated.locale === 'en-US' ? 'en-US' : 'zh-CN'
       setConfig(updated)
-      setMessage(t.saved)
+      setSavedSnapshot(createConfigSnapshot(updated))
+      setMessage(messages[nextLocale].saved)
     } catch (saveError) {
       setError(t.saveFailed + ': ' + (saveError instanceof Error ? saveError.message : t.unknownError))
     } finally {
@@ -500,6 +644,20 @@ export default function App() {
 
           <div className='mt-4 grid gap-4 xl:grid-cols-[16rem_minmax(0,1fr)]'>
             <div className='rounded-[1.5rem] border border-slate-200 bg-slate-50/80 p-2.5 shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)]'>
+              <div className='mb-2 px-1'>
+                <label className='sr-only' htmlFor='app-rule-search'>
+                  {t.searchRules}
+                </label>
+                <input
+                  id='app-rule-search'
+                  autoComplete='off'
+                  className='text-input h-10'
+                  placeholder={t.searchRulesPlaceholder}
+                  type='search'
+                  value={ruleSearchQuery}
+                  onChange={(event) => setRuleSearchQuery(event.target.value)}
+                />
+              </div>
               <div className='max-h-[calc(100vh-15rem)] space-y-2 overflow-y-auto pr-1'>
                 <ProcessRuleListItem
                   title={t.globalProcessName}
@@ -509,7 +667,7 @@ export default function App() {
                   onClick={() => setSelectedRuleId(GLOBAL_RULE_ID)}
                 />
 
-                {config.appRules.map((rule) => (
+                {filteredAppRules.map((rule) => (
                   <ProcessRuleListItem
                     key={rule.id}
                     enabled={rule.enabled}
@@ -521,6 +679,12 @@ export default function App() {
                     onClick={() => setSelectedRuleId(rule.id)}
                   />
                 ))}
+
+                {normalizedRuleSearchQuery && filteredAppRules.length === 0 && (
+                  <div className='rounded-2xl border border-dashed border-slate-200 bg-white/80 px-3 py-4 text-sm text-slate-500'>
+                    {t.noMatchingRules}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -551,6 +715,7 @@ export default function App() {
                       <BindingEditor
                         key={'default-' + index}
                         binding={binding}
+                        gestureError={formatGestureConflictMessage(defaultGestureConflicts.byIndex[index], t)}
                         text={t}
                         onChange={(nextBinding) =>
                           patchConfig((current) => ({
@@ -650,6 +815,7 @@ export default function App() {
                       <BindingEditor
                         key={selectedRule.id + '-' + bindingIndex}
                         binding={binding}
+                        gestureError={formatGestureConflictMessage(appRuleGestureConflicts[selectedRule.id]?.byIndex[bindingIndex], t)}
                         text={t}
                         onChange={(nextBinding) =>
                           patchConfig((current) => ({
@@ -707,30 +873,32 @@ export default function App() {
       </div>
 
       <div className='pointer-events-none fixed bottom-5 right-3 z-40 sm:bottom-6 sm:right-[clamp(1rem,2vw,1.5rem)]'>
-        {(message || error) && (
+        {(message || error || saveBlockedNotice || unsavedNotice) && (
           <div
             aria-live='polite'
             className={
               'pointer-events-auto absolute bottom-full left-0 mb-3 max-w-[calc(100vw-1.5rem)] rounded-2xl px-4 py-3 text-sm font-medium shadow-lg backdrop-blur sm:max-w-sm ' +
-              (error
+              (error || saveBlockedNotice
                 ? 'border border-red-200 bg-red-50/95 text-red-700'
-                : 'border border-emerald-200 bg-emerald-50/95 text-emerald-700')
+                : message
+                  ? 'border border-emerald-200 bg-emerald-50/95 text-emerald-700'
+                  : 'border border-amber-200 bg-amber-50/95 text-amber-700')
             }
-            role={error ? 'alert' : 'status'}
+            role={error || saveBlockedNotice ? 'alert' : 'status'}
           >
-            {error || message}
+            {error || saveBlockedNotice || message || unsavedNotice}
           </div>
         )}
 
         <button
-          aria-label={saving ? t.saving : t.save}
+          aria-label={saveButtonTitle}
           className='pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-lg bg-blue-600 text-white shadow-[0_16px_30px_-18px_rgba(37,99,235,0.72)] transition hover:scale-[1.03] hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-200 disabled:cursor-not-allowed disabled:bg-slate-400 sm:h-12 sm:w-12 sm:rounded-xl'
-          disabled={saving}
+          disabled={saving || !isDirty || hasGestureConflicts}
           onClick={saveConfig}
-          title={saving ? t.saving : t.save}
+          title={saveButtonTitle}
           type='button'
         >
-          <span className='sr-only'>{saving ? t.saving : t.save}</span>
+          <span className='sr-only'>{saveButtonTitle}</span>
           {saving ? <SpinnerIcon /> : <SaveIcon />}
         </button>
       </div>
@@ -990,16 +1158,23 @@ function ProcessRuleListItem(props: {
 
 function BindingEditor(props: {
   binding: GestureBinding
+  gestureError?: string
   text: I18nText
   onChange: (binding: GestureBinding) => void
   onDelete: () => void
 }) {
   const actionType = props.binding.action.type
+  const hasGestureConflict = Boolean(props.gestureError)
 
   return (
-    <div className='gesture-card group rounded-[1.25rem] border border-slate-200 bg-white p-3.5'>
+    <div
+      className={
+        'gesture-card group rounded-[1.25rem] border bg-white p-3.5 ' +
+        (hasGestureConflict ? 'border-red-300 shadow-[0_0_0_1px_rgba(239,68,68,0.08)]' : 'border-slate-200')
+      }
+    >
       <div className='grid gap-3 xl:grid-cols-[11.5rem_minmax(0,1fr)]'>
-        <div className={BINDING_PANEL_CLASS}>
+        <div className={BINDING_PANEL_CLASS + (hasGestureConflict ? ' border-red-200 bg-red-50/70' : '')}>
           <label className='field-label'>{props.text.gesture}</label>
           <GestureComposer
             label={props.text.gesture}
@@ -1007,6 +1182,7 @@ function BindingEditor(props: {
             text={props.text}
             onChange={(gesture) => props.onChange({ ...props.binding, gesture })}
           />
+          {props.gestureError && <p className='mt-2 text-sm text-red-600'>{props.gestureError}</p>}
         </div>
 
         <div className='grid gap-3'>

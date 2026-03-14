@@ -6,9 +6,12 @@ export interface I18nText {
   save: string
   saving: string
   saved: string
+  noChangesToSave: string
   saveFailed: string
   fetchConfigFailed: string
   unknownError: string
+  unsavedChangesHint: string
+  unsavedChangesGuard: string
   loading: string
   noConfigLoaded: string
   globalSettings: string
@@ -30,6 +33,9 @@ export interface I18nText {
   defaultRules: string
   appRules: string
   processRulesHint: string
+  searchRules: string
+  searchRulesPlaceholder: string
+  noMatchingRules: string
   addRule: string
   addBinding: string
   ruleName: string
@@ -57,6 +63,8 @@ export interface I18nText {
   hotkeyManualHint: string
   selectKey: string
   directionHint: string
+  duplicateGestureConflict: string
+  saveBlockedByGestureConflicts: string
 }
 
 export const messages: Record<Locale, I18nText> = {
@@ -66,9 +74,12 @@ export const messages: Record<Locale, I18nText> = {
     save: '保存配置',
     saving: '保存中...',
     saved: '配置已保存',
+    noChangesToSave: '当前没有需要保存的更改',
     saveFailed: '保存失败',
     fetchConfigFailed: '获取配置失败',
     unknownError: '未知错误',
+    unsavedChangesHint: '存在未保存修改，刷新或关闭页面前请先保存。',
+    unsavedChangesGuard: '存在未保存修改，确认要离开当前页面吗？',
     loading: '加载中...',
     noConfigLoaded: '未加载到配置',
     globalSettings: '全局设置',
@@ -90,6 +101,9 @@ export const messages: Record<Locale, I18nText> = {
     defaultRules: '全局默认手势',
     appRules: '按程序定制',
     processRulesHint: '左侧选择进程，右侧编辑该进程对应的手势规则；未命中特定程序时会回退到全局规则。',
+    searchRules: '搜索程序规则',
+    searchRulesPlaceholder: '搜索规则名或进程名',
+    noMatchingRules: '没有匹配当前搜索条件的程序规则。',
     addRule: '新增程序规则',
     addBinding: '新增手势',
     ruleName: '规则名称',
@@ -116,7 +130,9 @@ export const messages: Record<Locale, I18nText> = {
     hotkeyHint: '点击输入框后直接按下快捷键组合',
     hotkeyManualHint: '部分浏览器快捷键（如 Ctrl+W、Ctrl+L）会被浏览器优先处理；这类组合请用下方按钮和按键列表手动设置。',
     selectKey: '选择按键',
-    directionHint: '支持 U / D / L / R 任意组合，例如 DR、ULR'
+    directionHint: '支持 U / D / L / R 任意组合，例如 DR、ULR',
+    duplicateGestureConflict: '重复手势会导致同一作用域内较早的条目在运行时优先命中。',
+    saveBlockedByGestureConflicts: '保存前请先解决重复手势：'
   },
   'en-US': {
     title: 'Gesto Control Center',
@@ -124,9 +140,12 @@ export const messages: Record<Locale, I18nText> = {
     save: 'Save Config',
     saving: 'Saving...',
     saved: 'Configuration saved',
+    noChangesToSave: 'There are no changes to save',
     saveFailed: 'Save failed',
     fetchConfigFailed: 'Failed to fetch config payload',
     unknownError: 'Unknown error',
+    unsavedChangesHint: 'You have unsaved changes. Save before refreshing or closing this page.',
+    unsavedChangesGuard: 'You have unsaved changes. Are you sure you want to leave this page?',
     loading: 'Loading...',
     noConfigLoaded: 'No config loaded',
     globalSettings: 'Global Settings',
@@ -148,6 +167,9 @@ export const messages: Record<Locale, I18nText> = {
     defaultRules: 'Default Gestures',
     appRules: 'Per-App Rules',
     processRulesHint: 'Select a process on the left and edit its gesture rules on the right; unmatched apps fall back to the global rule.',
+    searchRules: 'Search app rules',
+    searchRulesPlaceholder: 'Search by rule name or process name',
+    noMatchingRules: 'No app rules match the current search.',
     addRule: 'Add App Rule',
     addBinding: 'Add Gesture',
     ruleName: 'Rule Name',
@@ -174,6 +196,8 @@ export const messages: Record<Locale, I18nText> = {
     hotkeyHint: 'Focus the field and press the shortcut combination directly',
     hotkeyManualHint: 'Some browser shortcuts, such as Ctrl+W and Ctrl+L, are handled by the browser first; use the modifier buttons and key list below for those combinations.',
     selectKey: 'Select a key',
-    directionHint: 'Supports any U / D / L / R combination, such as DR or ULR'
+    directionHint: 'Supports any U / D / L / R combination, such as DR or ULR',
+    duplicateGestureConflict: 'Duplicate gestures make earlier bindings in the same scope win at runtime.',
+    saveBlockedByGestureConflicts: 'Resolve duplicate gestures before saving:'
   }
 }
